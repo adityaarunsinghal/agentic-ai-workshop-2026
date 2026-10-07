@@ -83,6 +83,8 @@ export function createApplication({
   const applicationView = createView({
     title: manifest.title,
     fixture: workshop.fixture,
+    runtimeMode:
+      workshop.runtimeMode ?? (workshop.fixture ? "fixture" : "hosted"),
     sessionId: randomUUID(),
     defaults: DEFAULTS_FOR_HARNESS_TESTING,
     model: null,
@@ -643,8 +645,8 @@ export function createApplication({
     const signal = controller.signal;
     const workshopBootstrap = await workshop.bootstrap(signal);
     showBootstrap(workshopBootstrap);
-    if (workshopBootstrap.mode !== "hosted")
-      throw new Error("Start a live workshop visit.");
+    if (!["hosted", "local", "fixture"].includes(workshopBootstrap.mode))
+      throw new Error("Start an interactive workshop visit or local preview.");
     currentTask.budget = createBudget(visitRequestUsage, options.reviewer, () =>
       applicationView.update({ requestsUsed: visitRequestUsage.used }),
     );
@@ -1094,8 +1096,11 @@ export function createApplication({
       await initialize();
       return { refreshed: true };
     }
-    if (workshop.current?.mode !== "hosted")
-      throw new HarnessError("SETUP", "Open a live workshop visit first.");
+    if (!["hosted", "local", "fixture"].includes(workshop.current?.mode))
+      throw new HarnessError(
+        "SETUP",
+        "Open an interactive workshop visit or local preview first.",
+      );
     const data = action.data;
     if (action.type === "check_recovery") {
       const pending = unconfirmedUserPreferencesWrite;

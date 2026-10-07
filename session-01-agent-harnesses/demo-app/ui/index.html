@@ -31,6 +31,10 @@
       <p id="fixture" class="fixture-note" hidden>
         Synthetic local fixture. No external HN or model request is made.
       </p>
+      <p id="local-mode" class="fixture-note" hidden>
+        Local OpenRouter: your configured account pays. Preferences are saved on
+        this computer. Retrying a failed request can incur another charge.
+      </p>
       <p id="error" class="notice" role="alert" hidden></p>
       <div class="workspace">
         <section class="task" aria-label="HN task">
@@ -164,7 +168,7 @@
       <button id="open-execution" class="mobile-execution quiet" type="button">
         View execution
       </button>
-      <footer>
+      <footer id="execution-boundary">
         Pi-mini is an educational subset of Pi 1.0.0. The workshop broker
         controls spending; the platform supplies execution isolation.
       </footer>

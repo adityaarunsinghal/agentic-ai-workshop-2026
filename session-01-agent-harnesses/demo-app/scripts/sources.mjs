@@ -219,6 +219,10 @@ function navigation() {
         "ui/style.css",
         "workshop-app.json",
         "skills/hn-briefing.md",
+        "local/workshop.mjs",
+        "local/hn.mjs",
+        "local/store.mjs",
+        "local/fixture.mjs",
       ]),
     ],
   };

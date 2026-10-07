@@ -1,1 +1,14 @@
 .DS_Store
+node_modules/
+.local/
+tmp/
+log.md
+*.log
+*.zip
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.venv/
+.ruff_cache/

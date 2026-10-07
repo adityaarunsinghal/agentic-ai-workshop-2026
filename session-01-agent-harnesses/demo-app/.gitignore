@@ -2,3 +2,12 @@ node_modules/
 *.zip
 log.md
 source-map.json
+.local/
+tmp/
+.env
+.env.*
+!.env.example
+*.log
+__pycache__/
+*.pyc
+.ruff_cache/

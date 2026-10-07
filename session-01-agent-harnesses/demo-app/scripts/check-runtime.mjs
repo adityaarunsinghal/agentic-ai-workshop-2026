@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-for (const directory of ["agent", "support", "ui", "scripts"]) {
+for (const directory of ["agent", "support", "ui", "scripts", "local"]) {
   const folder = path.join(root, directory);
   for (const name of fs
     .readdirSync(folder, { recursive: true })

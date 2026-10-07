@@ -1,0 +1,24 @@
+{
+  "rootFiles": [
+    ".env.example",
+    ".gitignore",
+    "LICENSE",
+    "README.md",
+    "THIRD-PARTY-NOTICES.md",
+    "package-files.json",
+    "package.json",
+    "package-lock.json",
+    "source-map.json",
+    "workshop-app.json"
+  ],
+  "directories": [
+    "agent",
+    "local",
+    "reference",
+    "scripts",
+    "skills",
+    "support",
+    "test",
+    "ui"
+  ]
+}

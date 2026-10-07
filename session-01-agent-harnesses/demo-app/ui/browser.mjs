@@ -423,6 +423,12 @@ function render() {
   const changed = contentSignature !== lastContentSignature;
   lastContentSignature = contentSignature;
   element("fixture").hidden = !applicationState.fixture;
+  element("local-mode").hidden = applicationState.runtimeMode !== "local";
+  if (["fixture", "local"].includes(applicationState.runtimeMode))
+    text(
+      "execution-boundary",
+      "Pi-mini is an educational subset of Pi 1.0.0. This local process runs with your computer's permissions.",
+    );
   text(
     "requests",
     `${applicationState.requestsUsed ?? 0} / ${applicationState.limits?.requestsPerVisit ?? 20} request attempts`,

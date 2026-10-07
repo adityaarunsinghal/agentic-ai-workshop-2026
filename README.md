@@ -6,6 +6,12 @@ from trying each other's projects.
 Each session's materials will be released in this repository the day before
 that class.
 
+## Session 1 materials
+
+Start with the [slides, readings and guided practice](session-01-agent-harnesses/README.md).
+The [demo guide](session-01-agent-harnesses/demo-app/README.md) covers the free
+local preview, real OpenRouter setup and source packaging.
+
 ## [Class webpage: materials and schedule](https://adityasinghal.com/agentic-ai-workshop/)
 
 Find the workshop schedule, teaching materials, and class announcements here.
@@ -17,7 +23,7 @@ to try the class demos, publish your agent, and give classmates feedback.
 
 ## Clone and build your own agent
 
-Install Git, Node.js 22.19 or newer, npm, and `zip`. Clone this repository and copy
+Install Git, Node.js 22.19 or newer, npm, and uv for packaging. Clone this repository and copy
 the Session 1 starter into a folder for your own project:
 
 ```bash
@@ -39,17 +45,16 @@ something useful to you. Give it a concrete task and decide which tools it needs
   requirements. Adjust the starter's HN-specific build checks if you change its
   declared services.
 
-After making changes:
+Start the free scripted preview:
 
 ```bash
-npm run build
-npm start
+npm run dev:fixture
 ```
 
-Open `http://localhost:8080` to view the interface. The starter uses class-platform
-services for inference and persistence; running it locally requires those
-connections or a local adapter you implement. For independent local work, connect
-your model adapter to OpenRouter and ask Adi about a custom key.
+Open the local address printed in the terminal. The preview uses synthetic
+HN records and model responses. For real local inference, follow the demo
+guide to configure your private OpenRouter key and model, then use
+`npm run dev:local`. You can ask Adi about a custom key.
 
 ## Zip and upload
 
@@ -58,10 +63,8 @@ your model adapter to OpenRouter and ask Adi about a custom key.
 2. Build your app, then run this command from inside its folder:
 
    ```bash
-   npm run build
-   zip -r ../my-agent.zip . \
-     -x "node_modules/*" ".git/*" ".env" ".env.*" \
-        "log.md" "source-map.json" "*.zip" ".DS_Store"
+   npm run package:workshop -- --output ../my-agent.zip
+   npm run verify:package -- --zip ../my-agent.zip
    ```
 
    Keep `workshop-app.json` at the ZIP root. Include source, assets, licenses,

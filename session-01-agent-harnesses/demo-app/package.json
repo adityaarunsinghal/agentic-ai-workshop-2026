@@ -11,7 +11,15 @@
     "prestart": "node scripts/check-runtime.mjs",
     "start": "node agent/app.mjs",
     "build": "node scripts/check-runtime.mjs",
-    "verify:sources": "node scripts/sources.mjs"
+    "verify:sources": "node scripts/sources.mjs",
+    "predev:fixture": "node scripts/check-runtime.mjs",
+    "dev:fixture": "node scripts/local.mjs fixture",
+    "predev:local": "node scripts/check-runtime.mjs",
+    "dev:local": "node scripts/local.mjs live",
+    "pretest": "node scripts/check-runtime.mjs",
+    "test": "node --test test/*.test.mjs",
+    "package:workshop": "node scripts/package.mjs",
+    "verify:package": "node scripts/verify-package.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.31.0",
