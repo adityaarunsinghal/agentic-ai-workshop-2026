@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "workshop.app.v1",
+  "slug": "session-01-harness-demo",
+  "title": "Session 1: Agent Harness Demo",
+  "description": "Explore an HN agent's context, tools, permissions and memory.",
+  "runtime": {
+    "languages": ["node22"],
+    "profile": "standard",
+    "build": ["node", "scripts/check-runtime.mjs"],
+    "start": ["node", "agent/app.mjs"],
+    "port": 8080,
+    "healthPath": "/healthz"
+  },
+  "instructions": "Ask for HN links, inspect the request and approve saved changes.",
+  "inference": {
+    "mode": "selectable",
+    "models": [
+      "deepseek/deepseek-v4.1-flash",
+      "openai/gpt-6-luna",
+      "z-ai/glm-5.3-flash"
+    ],
+    "defaultModel": "deepseek/deepseek-v4.1-flash",
+    "defaultProfile": "deepseek-auto",
+    "estimatedUsdPerVisit": { "low": 0, "high": 0.1 },
+    "estimateBasis": "Illustrative only, unmeasured for this demo. Up to twenty model requests; actual charges and portal limits apply."
+  },
+  "network": {
+    "classServices": ["hn"],
+    "publicHttpsDomains": [],
+    "publicWeb": false
+  },
+  "storage": { "visitorMiB": 1, "schema": "chat.v1" },
+  "integrations": []
+}

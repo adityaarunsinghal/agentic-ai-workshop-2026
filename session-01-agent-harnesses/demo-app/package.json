@@ -1,0 +1,22 @@
+{
+  "name": "session-01-harness-demo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "prestart": "node scripts/check-runtime.mjs",
+    "start": "node agent/app.mjs",
+    "build": "node scripts/check-runtime.mjs",
+    "verify:sources": "node scripts/sources.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.31.0",
+    "ajv": "8.20.0",
+    "eventsource-parser": "3.1.1",
+    "markdown-it": "15.0.2"
+  }
+}

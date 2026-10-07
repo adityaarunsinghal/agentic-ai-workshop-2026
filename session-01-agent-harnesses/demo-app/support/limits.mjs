@@ -1,0 +1,22 @@
+/** Application policy, shared with the UI. The broker may stop work sooner. */
+export const RESOURCE_LIMITS_FOR_HARNESS_TESTING = Object.freeze({
+  requestsPerVisit: 20,
+  requestsPerBriefing: 6,
+  toolCallsPerResponse: 4,
+  outputTokens: 4096,
+  defaultListingCount: 5,
+  sourceResults: 12,
+  inputCharacters: 4000,
+  bodyBytes: 24000,
+  contextBytes: 1024 * 1024,
+  userPreferencesBytes: 256 * 1024,
+  userPreferencesEntries: 50,
+  traceBytes: 12 * 1024 * 1024,
+  modelMs: 90000,
+  brokerAttempts: 3,
+  recoveryPollMs: 500,
+  recoveryReadMs: 5000,
+  sourceMs: 180000,
+  approvalMs: 120000,
+  scheduleSeconds: 300,
+});

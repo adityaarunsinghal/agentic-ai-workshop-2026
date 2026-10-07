@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Session 1: Agent Harness Demo</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/markdown-it.js" defer></script>
+    <script src="/browser.mjs" type="module"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#prompt">Skip to question</a>
+    <main>
+      <header class="masthead">
+        <div class="identity">
+          <span class="mark" aria-hidden="true">H</span>
+          <div>
+            <h2>HN briefing</h2>
+            <p class="hint">Session 1: Agent Harness Demo</p>
+          </div>
+        </div>
+        <div class="account">
+          <small id="model">Connecting to the workshop</small
+          ><span id="requests">0 / 20 request attempts</span
+          ><small id="allowance"></small>
+        </div>
+        <button id="explore" type="button" class="quiet">
+          Explore the harness
+        </button>
+      </header>
+      <p id="fixture" class="fixture-note" hidden>
+        Synthetic local fixture. No external HN or model request is made.
+      </p>
+      <p id="error" class="notice" role="alert" hidden></p>
+      <div class="workspace">
+        <section class="task" aria-label="HN task">
+          <div class="task-toolbar">
+            <p class="hint">Evidence from HN listings and story metadata.</p>
+            <button id="new-conversation" type="button" class="text-button">
+              New conversation
+            </button>
+          </div>
+          <div id="chat" aria-label="Conversation">
+            <div id="welcome" class="welcome">
+              <p class="eyebrow">YOUR NEXT READ</p>
+              <h3>What is worth opening?</h3>
+              <p>
+                Ask for a short reading list. Inspect the evidence and save the
+                links you want to revisit.
+              </p>
+            </div>
+          </div>
+          <section
+            id="approval"
+            class="approval"
+            aria-label="Approve a user-preferences change"
+            hidden
+          >
+            <p class="eyebrow">YOUR APPROVAL</p>
+            <h3>Save this user-preferences change?</h3>
+            <p id="approval-summary"></p>
+            <ul id="approval-links"></ul>
+            <p id="approval-preference"></p>
+            <p class="hint">Permission applies to this exact change.</p>
+            <label class="checkbox"
+              ><input id="allow-run" type="checkbox" />Allow further
+              user-preferences writes for this briefing</label
+            >
+            <div class="button-row">
+              <button id="approve" type="button">Approve</button
+              ><button id="deny" type="button" class="quiet">Deny</button
+              ><span id="approval-expiry" class="hint"></span>
+            </div>
+            <details>
+              <summary>Change details</summary>
+              <pre id="approval-data"></pre>
+            </details>
+          </section>
+          <section
+            id="recovery"
+            class="recovery"
+            aria-label="Request status"
+            hidden
+          >
+            <h3 id="recovery-title" role="status" aria-live="polite"></h3>
+            <p id="recovery-reason"></p>
+            <div class="button-row">
+              <button id="resume" type="button" hidden>Try again</button
+              ><button
+                id="check-saved-change"
+                type="button"
+                class="quiet"
+                hidden
+              >
+                Check saved change</button
+              ><button id="check-recovery" type="button" class="quiet" hidden>
+                Check status</button
+              ><button id="edit-question" type="button" class="quiet" hidden>
+                Edit question
+              </button>
+            </div>
+          </section>
+          <p id="save-status" class="notice" role="status" hidden></p>
+          <ul id="queued" class="queue-list"></ul>
+          <div class="latest-row">
+            <button id="jump-latest" type="button" class="quiet" hidden>
+              Jump to latest
+            </button>
+          </div>
+          <section class="composer" aria-label="Ask the HN agent">
+            <form id="ask">
+              <label for="prompt" id="prompt-label"
+                >What would you like to find on HN?</label
+              >
+              <textarea
+                id="prompt"
+                rows="3"
+                maxlength="4000"
+                placeholder="Find up to three useful HN links for someone building agents."
+              ></textarea>
+              <div id="queue" hidden>
+                <label for="delivery">Deliver this input</label
+                ><select id="delivery">
+                  <option value="steer">Steer after current tools</option>
+                  <option value="follow_up">
+                    Follow up after ordinary work
+                  </option>
+                </select>
+                <p id="delivery-hint" class="hint">
+                  Steering waits for the current tools to finish.
+                </p>
+              </div>
+              <div class="composer-actions">
+                <button id="example" type="button" class="text-button">
+                  Try the example</button
+                ><span class="hint keyboard-hint"
+                  >Enter to send · Shift+Enter for a new line</span
+                ><button id="stop" type="button" class="quiet" hidden>
+                  Stop</button
+                ><button id="run" type="submit" disabled>Ask</button>
+              </div>
+            </form>
+            <div class="statusline">
+              <span id="phase" role="status">Connecting</span
+              ><span id="scope"></span>
+            </div>
+          </section>
+        </section>
+        <aside id="execution-home" aria-label="Execution timeline">
+          <section id="execution-panel">
+            <div class="section-head">
+              <h3>Execution</h3>
+              <button id="activity-details" class="text-button" type="button">
+                Details
+              </button>
+            </div>
+            <p id="execution-summary" class="hint">
+              Requests and their tools appear here.
+            </p>
+            <div id="trace"></div>
+          </section>
+        </aside>
+      </div>
+      <button id="open-execution" class="mobile-execution quiet" type="button">
+        View execution
+      </button>
+      <footer>
+        Pi-mini is an educational subset of Pi 1.0.0. The workshop broker
+        controls spending; the platform supplies execution isolation.
+      </footer>
+    </main>
+    <dialog id="execution-dialog" aria-labelledby="execution-title">
+      <div class="section-head">
+        <h3 id="execution-title">Execution</h3>
+        <button id="close-execution" type="button" class="quiet">
+          Back to task
+        </button>
+      </div>
+      <div id="execution-drawer"></div>
+    </dialog>
+    <dialog id="explore-dialog" aria-labelledby="explore-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">SESSION 1</p>
+          <h3 id="explore-title">Explore the harness</h3>
+        </div>
+        <button id="close-explore" type="button" class="quiet">
+          Back to task
+        </button>
+      </div>
+      <div class="explore-layout">
+        <nav
+          id="dimensions"
+          class="dimensions"
+          aria-label="Harness dimensions"
+        ></nav>
+        <div class="explore-content">
+          <p id="effective-settings" class="hint"></p>
+          <section data-dimension="control">
+            <h3>Who chooses the steps?</h3>
+            <p>
+              The agent can choose tools, or the application can fetch HN
+              metadata before asking for a briefing.
+            </p>
+            <label
+              >Control for the next briefing<select id="control">
+                <option value="agent">Agent chooses the steps</option>
+                <option value="fixed">Fixed fetch, then briefing</option>
+              </select></label
+            >
+          </section>
+          <section data-dimension="trigger" hidden>
+            <h3>What starts the work?</h3>
+            <p>
+              Ask from the task, or schedule one request using the current draft
+              and next-briefing settings.
+            </p>
+            <div class="schedule-controls">
+              <label
+                >Start once after<input
+                  id="delay"
+                  type="number"
+                  min="1"
+                  max="300"
+                  value="30"
+                />seconds</label
+              ><button id="schedule" type="button" class="quiet">
+                Schedule this request</button
+              ><button id="cancel-schedule" type="button" class="quiet" hidden>
+                Cancel schedule
+              </button>
+            </div>
+            <p id="schedule-status" role="status" class="hint"></p>
+            <p class="hint">
+              Scheduling requires this active workshop visit. It ends with the
+              visit.
+            </p>
+          </section>
+          <section data-dimension="authority" hidden>
+            <h3>Who permits a write?</h3>
+            <p>
+              user-preferences writes pass a permission check before execution.
+              Approval shows the exact proposed change.
+            </p>
+            <label
+              >user-preferences authority for the next briefing<select
+                id="permission"
+              >
+                <option value="ask">Ask before each write</option>
+                <option value="allow">Allow writes for this briefing</option>
+              </select></label
+            >
+          </section>
+          <section data-dimension="duration" hidden>
+            <h3>How long does work continue?</h3>
+            <p>
+              Requests and tool work continue within the active visit. Stop ends
+              current work. Reconnecting reads the same execution.
+            </p>
+            <p id="visit-expiry" class="hint"></p>
+            <button id="explore-stop" class="quiet" type="button">
+              Stop current activity
+            </button>
+          </section>
+          <section data-dimension="tools" hidden>
+            <h3>What can the agent use?</h3>
+            <p>
+              HN metadata, the local briefing skill and your visitor
+              user-preferences. Article text and a browser tool are unavailable.
+            </p>
+            <div class="settings-grid">
+              <label
+                >HN category<select id="category">
+                  <option value="top">Top</option>
+                  <option value="new">New</option>
+                  <option value="best">Best</option>
+                </select></label
+              ><label
+                >Listing size<input
+                  id="count"
+                  type="number"
+                  min="1"
+                  max="12"
+                  value="5"
+              /></label>
+            </div>
+          </section>
+          <section data-dimension="topology" hidden>
+            <h3>Who reviews the result?</h3>
+            <p>
+              An optional reviewer receives its own context after the producer
+              finishes. Both share the briefing's attempt allowance.
+            </p>
+            <label class="checkbox"
+              ><input id="reviewer" type="checkbox" />Add a separate reviewer to
+              the next briefing</label
+            >
+          </section>
+          <section data-dimension="memory" hidden>
+            <h3>What carries forward?</h3>
+            <p>
+              Conversation stays in this running app. Saved interests and links
+              survive visits.
+            </p>
+            <label
+              >Topic for the next briefing<input
+                id="topic"
+                maxlength="256"
+                placeholder="Blank uses your saved interest"
+            /></label>
+            <section id="user-preferences">
+              <h4>Your saved user-preferences</h4>
+              <p id="user-preferences-status" class="hint"></p>
+              <label for="remember-topic">Remember an interest</label
+              ><input
+                id="remember-topic"
+                maxlength="256"
+                placeholder="For example, systems engineering"
+              />
+              <div class="button-row">
+                <button id="remember" type="button" class="quiet">
+                  Request save</button
+                ><button id="refresh" type="button" class="quiet">
+                  Reload
+                </button>
+              </div>
+              <p id="saved-topic"></p>
+              <ul id="saved-links"></ul>
+              <details id="pending-save" hidden>
+                <summary>Unconfirmed change, retained in this visit</summary>
+                <pre id="pending-save-data"></pre>
+              </details>
+            </section>
+          </section>
+          <section data-dimension="interface" hidden>
+            <h3>How do you inspect the work?</h3>
+            <p>
+              The task, cards, approvals and execution timeline observe the same
+              application state. Select any request to see its context, response
+              and tool observations.
+            </p>
+            <p class="hint">
+              Request bodies are a labeled projection. Credentials and provider
+              reasoning replay stay on the server.
+            </p>
+          </section>
+          <p id="dimension-value" class="recorded-setting"></p>
+          <button id="dimension-source" class="quiet" type="button">
+            See the code
+          </button>
+          <p class="hint settings-note">
+            Controls apply to the next briefing. Recorded settings describe the
+            selected briefing. A briefing allows up to six request attempts,
+            shared by the producer and optional reviewer.
+          </p>
+        </div>
+      </div>
+    </dialog>
+    <dialog id="request-dialog" aria-labelledby="request-title">
+      <div class="section-head">
+        <h3 id="request-title">Request details</h3>
+        <button id="close-request" type="button" class="quiet">
+          Back to execution
+        </button>
+      </div>
+      <p class="hint">
+        Request bodies are a labeled projection. Credentials and provider
+        reasoning replay stay on the server. These are supplied context and
+        observed actions.
+      </p>
+      <div class="button-row">
+        <button id="request-source" type="button" class="quiet">
+          See request code</button
+        ><button id="tool-source" type="button" class="quiet">
+          See tool code
+        </button>
+      </div>
+      <div id="request-data"></div>
+    </dialog>
+    <dialog id="source-dialog" aria-labelledby="source-title">
+      <div class="section-head">
+        <div>
+          <h3 id="source-title">Source</h3>
+          <p id="source-path" class="hint"></p>
+        </div>
+        <button id="close-source" type="button" class="quiet">Close</button>
+      </div>
+      <p id="source-difference" class="hint"></p>
+      <div class="button-row">
+        <button id="local-source" type="button">Our implementation</button
+        ><button id="original-source" type="button" class="quiet">
+          Real Pi 1.0.0
+        </button>
+      </div>
+      <div
+        id="source-code"
+        tabindex="0"
+        aria-label="Complete source file"
+      ></div>
+    </dialog>
+  </body>
+</html>
