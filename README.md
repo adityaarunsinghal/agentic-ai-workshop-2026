@@ -3,6 +3,9 @@
 Build an agent around an idea you care about, share it with the class, and learn
 from trying each other's projects.
 
+Each session's materials will be released in this repository the day before
+that class.
+
 ## [Class webpage: materials and schedule](https://adityasinghal.com/agentic-ai-workshop/)
 
 Find the workshop schedule, teaching materials, and class announcements here.
