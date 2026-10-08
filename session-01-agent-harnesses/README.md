@@ -12,10 +12,6 @@ it, and the observation sent back to the model.
    Follow Lalima, Harry and Tim through requests, tools, memory and permissions.
 3. Run the [HN demo](demo-app/README.md). Its free local preview uses scripted
    responses so you can inspect the same sequence.
-4. Follow the [small Python harness](examples/minimal-python/README.md) to see
-   the complete request/tool/result loop in one program. The
-   [Python syntax walkthrough](readings/python-harness-guide-2026-10-07.md)
-   provides optional detail.
 
 Use the ordinary source projects between classes. The slides carry the
 classroom presentation.

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smallest valid app</title>
+<style>
+@font-face{font-family:Montserrat;src:url("/montserrat.woff2")}
+*{box-sizing:border-box}body{margin:0;background:#090909;color:#f4ff47;font:15px Montserrat,sans-serif}
+main{max-width:900px;height:100dvh;margin:auto;padding:clamp(20px,5vw,48px);display:flex;flex-direction:column;gap:20px}
+header{border-top:4px solid;padding-top:14px}h2{margin:0;font-size:clamp(24px,4vw,36px);font-weight:600}
+#chat{flex:1;min-height:0;overflow:auto}article{margin-bottom:14px;padding:18px;background:#16170d;border-left:3px solid;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}
+article.you{margin-left:8%;background:#f4ff47;color:#090909}article.tool{font-size:12px;background:transparent;color:#b5b98b}
+strong{display:block;margin-bottom:6px;font-size:11px}form{display:flex;gap:12px}textarea,button{font:inherit}
+textarea{flex:1;min-width:0;min-height:78px;resize:none;border:1px solid #555;background:#141414;color:inherit;padding:14px}
+button{border:0;background:#f4ff47;color:#090909;padding:0 22px;cursor:pointer}button:disabled{opacity:.4;cursor:default}
+:focus-visible{outline:2px solid #f4ff47;outline-offset:4px}footer{font-size:12px;color:#b5b98b}
+</style>
+<main>
+<header><h2>Smallest valid app</h2></header>
+<section id="chat" aria-label="Conversation" aria-live="polite"></section>
+<form><textarea aria-label="Your message" placeholder="What is the current UTC time?" maxlength="4000" required></textarea><button disabled>Send</button></form>
+<footer id="status" role="status">Chat lasts for this visit.</footer>
+</main>
+<script src="/chat.js"></script>
+</html>

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "workshop.app.v1",
+  "slug": "smallest-valid-app",
+  "title": "Smallest valid app",
+  "description": "Chat with one UTC-time tool.",
+  "runtime": {
+    "languages": ["python312"],
+    "profile": "standard",
+    "build": ["python3.12", "-m", "py_compile", "app.py"],
+    "start": ["python3.12", "app.py"],
+    "port": 8080,
+    "healthPath": "/healthz"
+  },
+  "instructions": "Ask for the current UTC time, then keep chatting.",
+  "inference": {
+    "mode": "fixed",
+    "models": ["deepseek/deepseek-v4.1-flash"],
+    "defaultProfile": "deepseek-auto",
+    "estimatedUsdPerVisit": {"low": 0, "high": 0.1},
+    "estimateBasis": "Illustrative; portal limits apply."
+  },
+  "network": {
+    "classServices": [],
+    "publicHttpsDomains": [],
+    "publicWeb": false
+  },
+  "storage": {"visitorMiB": 0, "schema": "chat.v1"},
+  "integrations": []
+}
