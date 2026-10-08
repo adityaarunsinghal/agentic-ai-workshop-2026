@@ -50,8 +50,8 @@ description and explicit parameter types.
 
 Inspect the MCP tool's `model_dump(by_alias=True)` output to see the wire
 schema. The exact dependencies are recorded in the adjacent script lockfiles.
-Use the optional Python syntax walkthrough from the Session 1 reading list
-when a language construct is unfamiliar.
+For the Python syntax walkthrough, open the Session 1 slides, go to
+“Smallest Working 'Harness'”, and press **N** to read its notes.
 
 This small teaching program has no application request budget, approval UI,
 persistent conversation or recovery checkpoint. Use a capped key and read-only
