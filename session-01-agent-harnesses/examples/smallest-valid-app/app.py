@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import UTC, datetime
-from http.client import HTTPConnection, HTTPException
+from http.client import HTTPConnection, HTTPException, HTTPSConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Lock, Thread
@@ -31,10 +31,19 @@ def get_current_time():
 
 
 def broker(path, body=None, profile=None):
-    url = urlsplit(os.environ["WORKSHOP_BROKER_URL"])
-    connection = HTTPConnection(url.hostname, url.port, timeout=90)
+    development = bool(os.environ.get("WORKSHOP_DEVELOPMENT_URL"))
+    url = urlsplit(
+        os.environ["WORKSHOP_DEVELOPMENT_URL" if development else "WORKSHOP_BROKER_URL"]
+    )
+    if url.scheme not in ("http", "https"):
+        raise ValueError("Use an HTTP or HTTPS workshop gateway.")
+    connection_type = HTTPSConnection if url.scheme == "https" else HTTPConnection
+    connection = connection_type(url.hostname, url.port, timeout=90)
     headers = {
-        "Authorization": "Bearer " + os.environ["WORKSHOP_RUN_TOKEN"],
+        "Authorization": "Bearer "
+        + os.environ[
+            "WORKSHOP_DEVELOPMENT_TOKEN" if development else "WORKSHOP_RUN_TOKEN"
+        ],
         "Content-Type": "application/json",
         "X-Workshop-Contract-Version": "workshop.app.v1",
     }
@@ -49,7 +58,7 @@ def broker(path, body=None, profile=None):
     try:
         connection.request(
             "GET" if body is None else "POST",
-            path,
+            url.path.rstrip("/") + path,
             None if body is None else json.dumps(body),
             headers,
         )
@@ -66,12 +75,14 @@ def run(prompt):
     global history, error
     try:
         boot = broker("/v1/bootstrap")
+        development = bool(os.environ.get("WORKSHOP_DEVELOPMENT_URL"))
         if (
-            boot["mode"] != "hosted"
+            boot["mode"] != ("development" if development else "hosted")
             or boot["simulated"]
-            or boot["runId"] != os.environ["WORKSHOP_RUN_ID"]
+            or boot["contractVersion"] != "workshop.app.v1"
+            or (not development and boot["runId"] != os.environ["WORKSHOP_RUN_ID"])
         ):
-            raise ValueError("Start this app through the workshop portal.")
+            raise ValueError("The workshop bootstrap does not match this runtime.")
         selection = boot["inference"]["selection"]
         messages = history + [{"role": "user", "content": prompt}]
         # A turn contains one model response and its requested tool work.
@@ -123,10 +134,11 @@ def run(prompt):
                     }
                 )
     except (HTTPException, OSError, ValueError, KeyError, TypeError) as exception:
-        error = str(exception).replace(
-            os.environ.get("WORKSHOP_RUN_TOKEN", "\0"),
-            "[redacted]",
-        )
+        error = str(exception)
+        for name in ("WORKSHOP_RUN_TOKEN", "WORKSHOP_DEVELOPMENT_TOKEN"):
+            token = os.environ.get(name)
+            if token:
+                error = error.replace(token, "[redacted]")
     finally:
         busy.release()
 

@@ -24,6 +24,7 @@ if manifest["slug"] != args.slug:
         f'Set the manifest slug to "{args.slug}", then package again.'
     )
 names = (
+    ".env.example",
     "app.py",
     "index.html",
     "chat.js",
