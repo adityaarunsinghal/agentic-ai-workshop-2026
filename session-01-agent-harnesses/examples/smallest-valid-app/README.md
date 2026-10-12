@@ -83,6 +83,9 @@ uv run --locked python package.py --slug smallest-valid-app \
 Upload that ZIP, launch it and ask **What is the current UTC time?**
 The app uses the workshop broker and runs through the portal.
 
+The packager leaves local `.env` and `.env.example` files out of the ZIP.
+Hosted execution receives its gateway and port from the platform.
+
 The packager rejects a different manifest slug before writing the ZIP.
 The platform also checks the claimed address during ZIP inspection, before
 running the build. A ZIP can pass file and lock checks and fail this address check.

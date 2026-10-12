@@ -24,7 +24,6 @@ if manifest["slug"] != args.slug:
         f'Set the manifest slug to "{args.slug}", then package again.'
     )
 names = (
-    ".env.example",
     "app.py",
     "index.html",
     "chat.js",
@@ -36,6 +35,8 @@ names = (
     "README.md",
     "package.py",
 )
+# Local development settings stay in the checkout. Hosted execution receives
+# its gateway and port from the platform, so no .env files belong in the ZIP.
 data = {
     name: manifest_bytes if name == "workshop-app.json" else (root / name).read_bytes()
     for name in names
