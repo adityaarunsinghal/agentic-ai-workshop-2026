@@ -21,9 +21,10 @@ cp -n .env.example .env
 If you already cloned the repository, enter this example's folder and run
 only the copy command. It preserves an existing `.env`.
 
-In the class app store, save your own app's `workshop-app.json` policy through
-**My app**, then open **Account → Local development token**. Choose funding,
-a model and a session ceiling, and create a token. Paste it into
+In the class app store, open **Account → Local development token**. Choose
+funding, a model and a session ceiling, and create a token. Your saved
+**My app** settings are used when available; otherwise the store prepares
+basic settings for you. Paste the token into
 `WORKSHOP_DEVELOPMENT_TOKEN` in `.env`. Use the gateway displayed by the store.
 The `.env` file is gitignored; keep your token out of source files and messages.
 
