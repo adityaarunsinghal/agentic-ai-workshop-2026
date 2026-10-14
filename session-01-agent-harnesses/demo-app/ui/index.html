@@ -159,8 +159,10 @@
               </button>
             </div>
             <p id="execution-summary" class="hint">
-              Requests and their tools appear here.
+              Requests and source operations appear here.
             </p>
+            <p class="hint">Recent operations are shown. Details includes earlier records.</p>
+            <p id="execution-capture" class="hint" role="status"></p>
             <div id="trace"></div>
           </section>
         </aside>
@@ -340,8 +342,8 @@
             <h3>How do you inspect the work?</h3>
             <p>
               The task, cards, approvals and execution timeline observe the same
-              application state. Select any request to see its context, response
-              and tool observations.
+              application state. Select a request, then open a record to load
+              its context, response or tool observation.
             </p>
             <p class="hint">
               Request bodies are a labeled projection. Credentials and provider
@@ -368,10 +370,34 @@
         </button>
       </div>
       <p class="hint">
-        Request bodies are a labeled projection. Credentials and provider
-        reasoning replay stay on the server. These are supplied context and
-        observed actions.
+        Open a record to load its full sanitized detail, including its original
+        event name. Provider reasoning replay stays on the server. These are
+        supplied context and observed actions.
       </p>
+      <p class="hint">
+        A request obtains one model response. A turn includes the response and
+        its tools. A run contains turns. A visit contains this app's conversations.
+        Local MCP uses an in-memory transport; hosted MCP uses HTTP.
+      </p>
+      <form id="execution-search" class="execution-filters">
+        <label for="execution-view">View
+          <select id="execution-view">
+            <option value="teaching">Teaching</option>
+            <option value="protocol">Protocol and all events</option>
+          </select>
+        </label>
+        <label for="execution-query">Search records
+          <input id="execution-query" type="search" maxlength="160" />
+        </label>
+        <button type="submit" class="quiet">Search</button>
+      </form>
+      <div class="button-row">
+        <button id="execution-all" type="button" class="quiet">All activity</button>
+        <button id="execution-refresh" type="button" class="quiet">Refresh list</button>
+        <button id="execution-next" type="button" class="quiet" disabled>Next page</button>
+      </div>
+      <p id="execution-load-status" class="hint" role="status" aria-live="polite"></p>
+      <p id="execution-freshness" class="hint"></p>
       <div class="button-row">
         <button id="request-source" type="button" class="quiet">
           See request code</button

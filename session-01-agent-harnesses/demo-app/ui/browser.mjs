@@ -21,6 +21,12 @@ let refreshing = false,
 let selectedHarnessDimension = "control",
   selectedRequestFilter = null,
   sourceReadGeneration = 0;
+let inspectionGeneration = 0,
+  inspectionController,
+  detailController,
+  inspectionCursor = null,
+  inspectionTitle = "Execution details",
+  inspectionSequence = null;
 let lastApprovalId = null,
   draftSession = null,
   lastUserPreferencesStatus = null;
@@ -138,7 +144,10 @@ function change(kind, raw) {
       )
         throw Error("Text gap.");
       message.text += data.text;
-    } else if (kind === "trace") applicationState.trace.push(data.entry);
+    } else if (kind === "execution") {
+      applicationState.trace = data.trace;
+      applicationState.execution = data.execution;
+    }
     applicationState.revision = data.revision;
     restoreDraft();
     render();
@@ -720,13 +729,8 @@ function renderApproval() {
 function recoveryOperationId() {
   return (
     applicationState.recovery?.operationId ??
-    [...applicationState.trace]
-      .reverse()
-      .find(
-        (entry) =>
-          entry.type === "app.request_start" &&
-          entry.briefingId === applicationState.resume?.briefingId,
-      )?.operationId
+    applicationState.resume?.operationId ??
+    applicationState.recoveryOperationId
   );
 }
 
@@ -874,73 +878,80 @@ function renderDimensions() {
     `${record ? "Recorded behavior" : "Default behavior"}: ${values[selectedHarnessDimension]}`,
   );
 }
-/**
- * Keep operational updates in authoritative state and system diagnostics.
- * The teaching view retains full request payloads, repeated schemas and IDs.
- * Project only event metadata; source observations and model content stay exact.
- */
-function executionTrace() {
-  return applicationState.trace
-    .filter(
-      (entry) =>
-        !["app.recovery", "app.recovery_status_unavailable"].includes(
-          entry.type,
-        ),
-    )
-    .map(({ recovery, recoverySupported, ...entry }) => {
-      if (entry.outcome) {
-        const { recovery: status, ...outcome } = entry.outcome;
-        entry.outcome = outcome;
-      }
-      return entry;
-    });
-}
-
-/** Group the teaching projection while retaining every delivery of a request. */
+/** Group compact observations. Full records never enter applicationState. */
 function groupTrace() {
-  const groups = new Map(),
-    current = new Map();
+  const groups = new Map();
   const activity = {
     id: "activity",
     entries: [],
-    title: "Application activity",
+    title: "Harness activity",
   };
   groups.set("activity", activity);
-  for (const entry of executionTrace()) {
-    const owner = `${entry.briefingId}:${entry.role || entry.actor || "producer"}`;
-    if (entry.type === "app.request_start") {
-      // A cached response can be delivered again under the same operation.
-      // Keep its first start and all prior delivery events together.
-      if (!groups.has(entry.operationId))
-        groups.set(entry.operationId, {
-          id: entry.operationId,
-          entries: [],
-          start: entry,
-          title: `Request ${groups.size}`,
-        });
-      // The latest delivery is active until its own end event arrives.
-      groups.get(entry.operationId).end = null;
-      current.set(owner, entry.operationId);
-      current.set(`${entry.briefingId}:latest`, entry.operationId);
+  for (const [index, entry] of (applicationState.execution?.requests ?? []).entries()) {
+    if (!entry) continue;
+    groups.set(entry.operationId, {
+      id: entry.operationId,
+      start: entry,
+      entries: [],
+      title: `Request ${index + 1}`,
+    });
+  }
+  for (const entry of [...(applicationState.trace ?? [])].sort(
+    (a, b) => a.sequence - b.sequence,
+  )) {
+    // Protocol lifecycle rows remain available in the paged inspector.
+    if (
+      ![
+        "tool_execution_start",
+        "mcp.request_start",
+        "app.approval_requested",
+        "app.approval_decision",
+        "app.approval_ended",
+        "app.permission",
+        "app.hn_observation",
+        "app.skill_loaded",
+        "app.fixed_source_call",
+        "app.input_queued",
+        "app.input_archived",
+        "app.input_rejected",
+        "app.user_preferences_saved",
+        "app.user_preferences_recovered",
+        "app.context_rejected",
+        "app.cancel_requested",
+        "app.action_rejected",
+        "app.recovery_status_unavailable",
+        "app.scheduled",
+        "app.schedule_failed",
+        "app.schedule_cancelled",
+        "execution.capture_error",
+        "app.setup_failed",
+        "app.user_preferences_error",
+      ].includes(entry.type) &&
+      !(
+        ["agent_end", "app.briefing_end"].includes(entry.type) &&
+        ["failed", "cancelled"].includes(entry.status)
+      )
+    )
+      continue;
+    if (entry.operationId && !groups.has(entry.operationId)) {
+      groups.set(entry.operationId, {
+        id: entry.operationId,
+        entries: [],
+        title: "Request activity",
+      });
     }
-    const id =
-      entry.operationId ||
-      current.get(owner) ||
-      (entry.type.startsWith("app.")
-        ? current.get(`${entry.briefingId}:latest`)
-        : null);
-    const group = groups.get(id) || activity;
+    const group = groups.get(entry.operationId) || activity;
     group.entries.push(entry);
-    if (entry.type === "app.request_end") group.end = entry;
   }
   return groups;
 }
 function renderTrace() {
   const groups = groupTrace();
-  let count = 0;
+  const visible = new Set();
+  const count = applicationState.execution?.requests?.length ?? 0;
   for (const group of groups.values()) {
-    if (!group.start) continue;
-    count++;
+    if (!group.start && !group.entries.length) continue;
+    visible.add(group.id);
     let item = requests.get(group.id);
     if (!item) {
       const section = node("section", "request-step"),
@@ -954,133 +965,207 @@ function renderTrace() {
       section.append(button, tools, outcome);
       element("trace").append(section);
       button.onclick = () => {
-        selectedRequestFilter = group.id;
-        openDialog("request-dialog", button);
-        renderInspection();
+        inspectExecution(
+          group.id === "activity" ? "all" : group.id,
+          group.title,
+          button,
+        );
       };
       item = { section, button, title, meta, tools, outcome };
       requests.set(group.id, item);
     }
     const isActive =
-      !group.end && applicationState.activeId === group.start.briefingId;
+      group.start?.status === "running" &&
+      applicationState.activeId === group.start.taskId;
     item.section.classList.toggle("active", isActive);
-    item.title.textContent = `Request ${count}`;
-    item.meta.textContent = `${group.start.role || "producer"} · ${new Date(group.start.at).toLocaleTimeString()}`;
-    const tools = group.entries.filter(
-      (e) => e.type === "tool_execution_start",
-    );
-    const toolSignature = JSON.stringify(tools.map((e) => e.id));
+    item.title.textContent = group.title;
+    item.meta.textContent = group.start
+      ? `Model${group.start.requestKind ? ` · ${group.start.requestKind}` : ""} · ${new Date(group.start.startedAt ?? group.start.at).toLocaleTimeString()}`
+      : "Observed operations";
+    const toolSignature = JSON.stringify(group.entries);
     if (item.tools.dataset.signature !== toolSignature) {
       item.tools.dataset.signature = toolSignature;
       item.tools.replaceChildren(
-        ...tools.map((e) => node("li", "", e.toolName)),
+        ...group.entries.map((entry) => {
+          const row = node("li");
+          const button = node(
+            "button",
+            "trace-operation",
+            `${executionRole(entry)} · ${entry.label} · ${entry.status}`,
+          );
+          button.type = "button";
+          button.onclick = () =>
+            inspectExecution(entry.id, entry.label, button);
+          row.append(button);
+          return row;
+        }),
       );
     }
-    const stopReason = [...group.entries]
-      .reverse()
-      .find((e) => e.type === "message_end" && e.message?.role === "assistant")
-      ?.message.stopReason;
-    const status =
-      group.end?.status === "failed"
-        ? "Request failed · inspect details"
-        : group.end
-          ? stopReason === "toolUse"
-            ? "Response with tools"
-            : stopReason === "stop"
-              ? "Response complete"
-              : group.end.status
-          : isActive
-            ? "In progress"
-            : "Outcome in details";
+    const status = isActive ? "In progress" : group.start?.status ?? "";
     if (item.outcome.textContent !== status) item.outcome.textContent = status;
   }
+  for (const [id, item] of requests)
+    if (!visible.has(id)) {
+      item.section.remove();
+      requests.delete(id);
+    }
   text(
     "execution-summary",
     count
       ? `${count} model ${count === 1 ? "request" : "requests"} · ${applicationState.activeId ? "Activity running" : applicationState.lastOutcome?.status || "Recorded activity"}`
-      : "Requests and their tools appear here.",
+      : "Requests and source operations appear here.",
   );
   text(
     "open-execution",
     `View execution${count ? ` · ${count} requests` : ""}`,
   );
-  if (element("request-dialog").open) renderInspection(groups);
+  const capture = applicationState.execution?.capture;
+  text(
+    "execution-capture",
+    capture?.status === "partial"
+      ? `Some diagnostic details could not be captured. ${capture.reason ?? ""} Application work can continue.`
+      : "",
+  );
+  if (element("request-dialog").open)
+    text(
+      "execution-freshness",
+      inspectionSequence !== null &&
+        applicationState.execution?.latestSequence > inspectionSequence
+        ? "New execution records are available. Refresh this list to see them."
+        : "",
+    );
 }
-/** Message roles identify the speaker; actor only identifies the owning agent. */
+/** The model chooses; tools execute; the harness coordinates and checks. */
 function executionRole(entry) {
-  if (entry.message?.role === "user") return "user";
-  if (
-    entry.message?.role === "toolResult" ||
-    entry.type.startsWith("tool_execution_")
-  )
-    return "tool";
-  if (
-    entry.message?.role === "assistant" ||
-    [
-      "agent_start",
-      "agent_end",
-      "turn_start",
-      "turn_end",
-      "app.request_start",
-      "app.request_end",
-    ].includes(entry.type)
-  )
-    return "agent";
-  return "harness";
+  return {
+    user: "User",
+    model: "Model",
+    tool: "Tool",
+    harness: "Harness",
+  }[entry.actor] ?? "Harness";
 }
 
-function renderInspection(groups = groupTrace()) {
-  const entries =
+function inspectExecution(filter, title, opener) {
+  selectedRequestFilter = filter;
+  inspectionTitle = title;
+  element("execution-query").value = "";
+  element("execution-query").disabled = filter !== "all";
+  openDialog("request-dialog", opener);
+  void loadInspection();
+}
+
+/** Replace one compact page; reading a list does not fetch any full record. */
+async function loadInspection(cursor) {
+  inspectionController?.abort();
+  detailController?.abort();
+  inspectionController = new AbortController();
+  const generation = ++inspectionGeneration;
+  inspectionCursor = null;
+  element("execution-next").disabled = true;
+  element("request-data").replaceChildren();
+  text("request-title", inspectionTitle);
+  text("execution-load-status", "Loading execution records…");
+  text("execution-freshness", "");
+  const query =
     selectedRequestFilter === "all"
-      ? executionTrace()
-      : (groups.get(selectedRequestFilter)?.entries ?? []);
-  text(
-    "request-title",
-    selectedRequestFilter === "all"
-      ? "Complete activity details"
-      : groups.get(selectedRequestFilter)?.title || "Request details",
-  );
-  const existing = new Set(
-    [...element("request-data").children].map((child) => child.dataset.event),
-  );
+      ? element("execution-query").value.trim()
+      : selectedRequestFilter;
+  const params = new URLSearchParams({
+    view: element("execution-view").value,
+    limit: "40",
+    ...(query ? { query } : {}),
+    ...(cursor ? { cursor } : {}),
+  });
+  try {
+    const response = await fetch(`/api/execution?${params}`, {
+      cache: "no-store",
+      signal: AbortSignal.any([
+        inspectionController.signal,
+        AbortSignal.timeout(15000),
+      ]),
+    });
+    if (!response.ok) throw Error("Execution records are unavailable. Try Refresh.");
+    const page = await response.json();
+    if (generation !== inspectionGeneration || !element("request-dialog").open)
+      return;
+    inspectionCursor = page.nextCursor;
+    inspectionSequence =
+      page.summary?.latestSequence ?? applicationState.execution?.latestSequence ?? 0;
+    renderInspection(page.records);
+    element("execution-next").disabled = !page.nextCursor;
+    text(
+      "execution-load-status",
+      page.records.length
+        ? `${page.records.length} records on this page. Open a record to load its full detail.`
+        : "No matching records.",
+    );
+  } catch (error) {
+    if (generation === inspectionGeneration && error.name !== "AbortError")
+      text("execution-load-status", error.message);
+  }
+}
+
+function renderInspection(entries) {
   for (const entry of entries) {
-    if (existing.has(entry.id)) continue;
     const details = node("details", "trace-entry");
     details.dataset.event = entry.id;
-    const label = `${new Date(entry.at).toLocaleTimeString()} · ${entry.type}${entry.toolName ? ` · ${entry.toolName}` : ""}`;
-    const role = executionRole(entry);
+    const label = `${new Date(entry.startedAt ?? entry.at).toLocaleTimeString()} · ${entry.label} · ${entry.status}`;
     const badge = node(
       "span",
       "trace-badge",
-      {
-        user: "User",
-        agent: "Agent",
-        tool: "Tool",
-        harness: "Harness",
-      }[role],
+      executionRole(entry),
     );
-    badge.dataset.role = role;
+    badge.dataset.role = entry.actor;
     const summary = node("summary");
-    summary.append(badge);
-    // Pi calls the run boundary agent_start/agent_end. Keep those raw names
-    // visible while spelling out the workshop's run terminology.
-    const boundary = {
-      agent_start: "Run started",
-      agent_end: "Run ended",
-    }[entry.type];
-    if (boundary)
-      summary.append(
-        node(
-          "strong",
-          "",
-          `${boundary}${entry.outcome?.status ? ` · ${entry.outcome.status}` : ""}`,
-        ),
-        document.createTextNode(" · "),
-      );
-    summary.append(document.createTextNode(label));
-    details.append(summary, node("pre", "", JSON.stringify(entry, null, 2)));
-    if (entry.type === "app.request_start") details.open = true;
+    summary.append(badge, document.createTextNode(label));
+    const body = node("div");
+    details.append(summary, body);
+    details.addEventListener("toggle", () => {
+      if (!details.open) {
+        body.replaceChildren();
+        return;
+      }
+      // Only the selected full record stays in the DOM. No full-record cache.
+      for (const other of element("request-data").querySelectorAll("details[open]"))
+        if (other !== details) {
+          other.open = false;
+          other.lastElementChild.replaceChildren();
+        }
+      void loadExecutionRecord(entry.id, details, body);
+    });
     element("request-data").append(details);
+  }
+}
+
+async function loadExecutionRecord(id, details, body) {
+  detailController?.abort();
+  const controller = new AbortController();
+  detailController = controller;
+  body.replaceChildren(node("p", "hint", "Loading full record…"));
+  try {
+    const response = await fetch(`/api/execution/${encodeURIComponent(id)}`, {
+      cache: "no-store",
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]),
+    });
+    const { record } = await response.json();
+    if (!response.ok || !record)
+      throw Error("This record is unavailable. Refresh the list and try again.");
+    if (controller.signal.aborted || !details.open || !body.isConnected) return;
+    body.replaceChildren(node("pre", "", JSON.stringify(record, null, 2)));
+    if (record.endRecordId) {
+      const endId = record.endRecordId;
+      const outcome = node("button", "quiet", "Load outcome record");
+      outcome.type = "button";
+      outcome.onclick = () => void loadExecutionRecord(endId, details, body);
+      body.prepend(outcome);
+    }
+  } catch (error) {
+    if (controller.signal.aborted || !details.open || !body.isConnected) return;
+    body.replaceChildren(node("p", "hint", error.message));
+    const retry = node("button", "quiet", "Retry read");
+    retry.type = "button";
+    retry.onclick = () => void loadExecutionRecord(id, details, body);
+    body.append(retry);
   }
 }
 function openDialog(id, opener) {
@@ -1268,10 +1353,23 @@ element("explore").onclick = () => {
 element("open-execution").onclick = () =>
   openDialog("execution-dialog", element("open-execution"));
 element("activity-details").onclick = () => {
-  selectedRequestFilter = "all";
-  openDialog("request-dialog", element("activity-details"));
-  renderInspection();
+  inspectExecution("all", "Execution details", element("activity-details"));
 };
+element("execution-refresh").onclick = () => void loadInspection();
+element("execution-next").onclick = () => void loadInspection(inspectionCursor);
+element("execution-view").onchange = () => void loadInspection();
+element("execution-search").onsubmit = (event) => {
+  event.preventDefault();
+  void loadInspection();
+};
+element("execution-all").onclick = () =>
+  inspectExecution("all", "Execution details", element("execution-all"));
+element("request-dialog").addEventListener("close", () => {
+  inspectionGeneration++;
+  inspectionController?.abort();
+  detailController?.abort();
+  element("request-data").replaceChildren();
+});
 for (const name of ["explore", "execution", "request"]) {
   element(`close-${name}`).onclick = () => element(`${name}-dialog`).close();
   element(`${name}-dialog`).addEventListener("close", () =>
@@ -1324,7 +1422,7 @@ events.addEventListener("snapshot", (event) => {
     void refresh();
   }
 });
-for (const kind of ["patch", "message", "message_update", "text", "trace"])
+for (const kind of ["patch", "message", "message_update", "text", "execution"])
   events.addEventListener(kind, (event) => change(kind, event.data));
 for (const kind of ["resync", "error"])
   events.addEventListener(kind, () => void refresh());

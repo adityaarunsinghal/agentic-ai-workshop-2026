@@ -134,6 +134,56 @@ export function inspectableRequest(payload) {
   };
 }
 
+/** Observe an actual MCP SDK boundary, without turning an observer into policy. */
+export async function observeMcp(context, boundary, operation, clean = (s) => s) {
+  const { notify = () => {}, ...correlation } = context ?? {};
+  const mcpRequestId = randomUUID();
+  const report = (entry) => {
+    try {
+      const pending = notify(entry);
+      if (pending instanceof Promise) pending.catch(() => {});
+    } catch {
+      // A diagnostic failure must not prevent or repeat the source operation.
+    }
+  };
+  const common = {
+    ...correlation,
+    ...boundary,
+    kind: "mcp.operation",
+    mcpRequestId,
+    label: `MCP ${boundary.method} · ${boundary.transport === "in-memory" ? "in memory" : "HTTP"}`,
+  };
+  report({
+    ...common,
+    id: mcpRequestId,
+    type: "mcp.request_start",
+    status: "running",
+  });
+  try {
+    const result = await operation();
+    report({
+      ...common,
+      type: "mcp.request_end",
+      kind: "source.mcp",
+      parentId: mcpRequestId,
+      status: result?.isError ? "failed" : "completed",
+      result,
+    });
+    return result;
+  } catch (error) {
+    report({
+      ...common,
+      type: "mcp.request_end",
+      kind: "source.mcp",
+      parentId: mcpRequestId,
+      status: error.name === "AbortError" ? "cancelled" : "failed",
+      error: clean(String(error?.message || error)),
+      ...outcomeErrorMetadata(error, clean),
+    });
+    throw error;
+  }
+}
+
 /** Build clients lazily so readiness requires no remote connection. */
 export function createWorkshop({
   env = process.env,
@@ -165,11 +215,14 @@ export function createWorkshop({
       throw new Error("Invalid workshop broker URL.");
   }
 
-  function cleanError(error) {
-    const text = String(error?.message || error || "Request failed.");
+  function redactText(text) {
     return workshopRunToken
       ? text.replaceAll(workshopRunToken, "[redacted]")
       : text;
+  }
+
+  function cleanError(error) {
+    return redactText(String(error?.message || error || "Request failed."));
   }
 
   function modelChanged() {
@@ -329,7 +382,7 @@ export function createWorkshop({
       );
   }
 
-  async function discover(signal) {
+  async function discover(signal, observation) {
     assertLive();
     if (hnToolDiscoveryPromise) return hnToolDiscoveryPromise;
     if (!workshopBootstrap.services.hn)
@@ -362,10 +415,22 @@ export function createWorkshop({
       reconnectionOptions: { maxRetries: 0 },
     });
     try {
-      await hnMcpClient.connect(hnMcpTransport, { timeout: 15000, signal });
-      const catalog = await hnMcpClient.listTools(
-        {},
-        { signal, timeout: 15000 },
+      await observeMcp(
+        observation,
+        { method: "initialize", transport: "streamable-http", actor: "harness" },
+        () => hnMcpClient.connect(hnMcpTransport, { timeout: 15000, signal }),
+        cleanError,
+      );
+      const catalog = await observeMcp(
+        observation,
+        {
+          method: "tools/list",
+          transport: "streamable-http",
+          actor: "harness",
+          request: {},
+        },
+        () => hnMcpClient.listTools({}, { signal, timeout: 15000 }),
+        cleanError,
       );
       if (catalog.nextCursor)
         throw new HarnessError(
@@ -387,20 +452,32 @@ export function createWorkshop({
     }
   }
 
-  async function listStories(args, signal) {
-    await discover(signal);
+  async function listStories(args, signal, observation) {
+    await discover(signal, observation);
     // Bob owns his service. Only this advertised HN capability is callable.
     try {
-      return await hnMcpClient.callTool(
-        { name: "list_stories", arguments: args },
-        undefined,
+      const request = { name: "list_stories", arguments: args };
+      return await observeMcp(
+        observation,
         {
-          signal: signalFor(
-            signal,
-            RESOURCE_LIMITS_FOR_HARNESS_TESTING.sourceMs,
-          ),
-          timeout: RESOURCE_LIMITS_FOR_HARNESS_TESTING.sourceMs,
+          method: "tools/call",
+          transport: "streamable-http",
+          actor: "tool",
+          request,
         },
+        () =>
+          hnMcpClient.callTool(
+            request,
+            undefined,
+            {
+              signal: signalFor(
+                signal,
+                RESOURCE_LIMITS_FOR_HARNESS_TESTING.sourceMs,
+              ),
+              timeout: RESOURCE_LIMITS_FOR_HARNESS_TESTING.sourceMs,
+            },
+          ),
+        cleanError,
       );
     } catch (error) {
       throw new HarnessError(error.code ?? "HN_REQUEST", cleanError(error));
@@ -525,11 +602,19 @@ export function createWorkshop({
           stream: true,
         };
         const bytes = Buffer.byteLength(JSON.stringify(payload));
-        if (bytes > RESOURCE_LIMITS_FOR_HARNESS_TESTING.contextBytes)
+        if (bytes > RESOURCE_LIMITS_FOR_HARNESS_TESTING.contextBytes) {
+          notify({
+            type: "context_rejected",
+            role,
+            status: "failed",
+            bytes,
+            payload: inspectableRequest(payload),
+          });
           throw new HarnessError(
             "CONTEXT_LIMIT",
             "The complete request exceeds the context limit. Start a new conversation; nothing was shortened.",
           );
+        }
         // Older brokers cannot bind profiles atomically. Refresh before every
         // dispatch and reject changes without consuming a model-request slot.
         if (!supportsInferenceProfileBinding) {
@@ -700,7 +785,7 @@ export function createWorkshop({
             type: "request_end",
             operationId,
             role,
-            status: "failed",
+            status: signal?.aborted ? "cancelled" : "failed",
             message: cleanError(error),
             ...outcomeErrorMetadata(metadata),
           });
@@ -822,6 +907,7 @@ export function createWorkshop({
     loadUserPreferences,
     saveUserPreferences,
     close,
+    redactText,
     cleanError,
     get recoverySupported() {
       return supportsInferenceRecovery;

@@ -21,7 +21,7 @@ export function createLocalWorkshop({
   env = process.env,
   fetcher = fetch,
   storeFile,
-  fixtureDelay = 180,
+  fixtureDelay = 0,
 } = {}) {
   if (!["fixture", "live"].includes(mode))
     throw new Error("Choose the explicit fixture or live local mode.");
@@ -65,10 +65,9 @@ export function createLocalWorkshop({
     },
     usage: null,
   };
-  const cleanError = (error) => {
-    const message = String(error?.message || error || "Local request failed.");
-    return key ? message.replaceAll(key, "[redacted]") : message;
-  };
+  const redactText = (text) => key ? text.replaceAll(key, "[redacted]") : text;
+  const cleanError = (error) =>
+    redactText(String(error?.message || error || "Local request failed."));
   function assertLive(signal) {
     signal?.throwIfAborted();
     if (Date.now() >= Date.parse(boot.expiresAt))
@@ -102,11 +101,19 @@ export function createLocalWorkshop({
           plugins: [{ id: "context-compression", enabled: false }],
         };
         const bytes = Buffer.byteLength(JSON.stringify(payload));
-        if (bytes > limits.contextBytes)
+        if (bytes > limits.contextBytes) {
+          notify({
+            type: "context_rejected",
+            role,
+            status: "failed",
+            bytes,
+            payload: inspectableRequest(payload),
+          });
           throw new HarnessError(
             "CONTEXT_LIMIT",
             "The complete request exceeds the context limit. Start a new conversation.",
           );
+        }
         const operationId = randomUUID();
         budget.reserve(
           role,
@@ -140,7 +147,8 @@ export function createLocalWorkshop({
           ]);
           let response;
           if (fixture) {
-            await delay(fixtureDelay, undefined, { signal: requestSignal });
+            if (fixtureDelay > 0)
+              await delay(fixtureDelay, undefined, { signal: requestSignal });
             response = new Response(fixtureCompletion(payload), {
               headers: { "content-type": "text/event-stream" },
             });
@@ -210,7 +218,7 @@ export function createLocalWorkshop({
             type: "request_end",
             operationId,
             role,
-            status: "failed",
+            status: signal?.aborted ? "cancelled" : "failed",
             message,
           });
           throw new HarnessError(
@@ -225,20 +233,25 @@ export function createLocalWorkshop({
   return {
     fixture,
     runtimeMode: fixture ? "fixture" : "local",
+    executionDirectory:
+      fixture || storeFile === ":memory:"
+        ? undefined
+        : resolve(env.LOCAL_WORKDIR || ".local", "execution", boot.runId),
     configured: true,
     recoverySupported: false,
+    redactText,
     cleanError,
     async bootstrap(signal) {
       assertLive(signal);
       return structuredClone(boot);
     },
-    discover: (signal) => {
+    discover: (signal, observation) => {
       assertLive(signal);
-      return source.discover(signal);
+      return source.discover(signal, observation);
     },
-    listStories: (args, signal) => {
+    listStories: (args, signal, observation) => {
       assertLive(signal);
-      return source.listStories(args, signal);
+      return source.listStories(args, signal, observation);
     },
     loadUserPreferences: (signal) => store.load(signal),
     saveUserPreferences: (value, etag, signal) => {

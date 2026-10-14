@@ -21,7 +21,9 @@ The model responses and HN records are synthetic. The actual Agent, MCP client
 and server, validation, approvals and interface run locally. No provider key,
 workshop login or inference credit is needed.
 
-Select a request to inspect its complete supplied context and observations.
+Select a request, then open a record to load its complete supplied context or
+observation. **Details** has Teaching and Protocol views, search and pages for
+older records. It loads full sanitized records only when you open them.
 Select **Save to reading list** and approve or deny the change. **Explore the
 harness** contains fixed control, memory, scheduling and reviewer options.
 
@@ -69,6 +71,11 @@ Saved preferences and reading lists live in `.local/preferences.sqlite`.
 Conversation history and timers belong to the running process. Set
 `LOCAL_WORKDIR` in your private environment to use a different local data
 directory. Each copied project uses its own default directory.
+
+Execution records use a separate `.local/execution/<visit-id>/` archive in
+real local mode. They do not control permissions, request accounting or
+recovery. Fixture and hosted visits use temporary process archives, removed
+when the process closes normally. Fixtures do not write to your local data.
 
 Node 22 may print an experimental SQLite warning. The printed preview address
 and the application's state determine whether startup succeeded.
@@ -127,6 +134,24 @@ A model request returns one response. A turn includes that response and its
 tool work. An Agent run can contain several turns. A conversation can contain
 several runs. A workshop visit is the platform's hosting and funding lifetime;
 the platform also calls that unit a run.
+
+Execution keeps the familiar request groups with a small timeline of model,
+tool and harness activity. The browser and event stream receive compact
+summaries. Expanding a record loads the server's sanitized original, including
+its raw event name. A selected record's **Load outcome record** opens its
+correlated result. Collapsing a record discards its full browser copy.
+
+MCP rows observe actual SDK initialization, discovery and tool calls. Local
+MCP exchanges messages in memory; the live local source then fetches the HN
+API. Hosted MCP uses Streamable HTTP. These are SDK operation records, not a
+packet capture. Errors, approvals, cancellation, context and observations stay
+reachable through Details, including Protocol view. Token deltas update the
+answer instead of creating a row for each fragment.
+
+The archive reports incomplete capture if a storage or queue bound is reached
+or an I/O operation fails. Diagnostics do not stop the Agent or free a request
+slot. Check status and Resume use separate application state, so hiding or
+retiring timeline rows cannot change recovery authority.
 
 Pi-mini uses sequential tool execution, batch validation and explicit
 checkpoints. Original Pi supports additional features, including parallel

@@ -80,28 +80,44 @@ export function createApplication({
   workshop = createWorkshop(),
   now = Date.now,
 } = {}) {
-  const applicationView = createView({
-    title: manifest.title,
-    fixture: workshop.fixture,
-    runtimeMode:
-      workshop.runtimeMode ?? (workshop.fixture ? "fixture" : "hosted"),
-    sessionId: randomUUID(),
-    defaults: DEFAULTS_FOR_HARNESS_TESTING,
-    model: null,
-    usage: null,
-    error: null,
-    activeId: null,
-    briefing: null,
-    lastOutcome: null,
-    userPreferences: {
-      value: emptyUserPreferences(),
-      loaded: false,
-      status: "loading",
+  const applicationView = createView(
+    {
+      title: manifest.title,
+      fixture: workshop.fixture,
+      runtimeMode:
+        workshop.runtimeMode ?? (workshop.fixture ? "fixture" : "hosted"),
+      sessionId: randomUUID(),
+      visitId: workshop.current?.runId ?? randomUUID(),
+      defaults: DEFAULTS_FOR_HARNESS_TESTING,
+      model: null,
+      usage: null,
+      error: null,
+      activeId: null,
+      briefing: null,
+      lastOutcome: null,
+      userPreferences: {
+        value: emptyUserPreferences(),
+        loaded: false,
+        status: "loading",
+      },
     },
-  });
-  const userPreferences = createUserPreferences(workshop, (state) =>
-    applicationView.update({ userPreferences: state }),
+    {
+      directory:
+        workshop.runtimeMode === "local"
+          ? workshop.executionDirectory
+          : undefined,
+      clean: workshop.redactText,
+    },
   );
+  const userPreferences = createUserPreferences(workshop, (state) => {
+    applicationView.update({ userPreferences: state });
+    if (state.error)
+      applicationView.trace({
+        type: "app.user_preferences_error",
+        status: "failed",
+        message: state.error,
+      });
+  });
   const observedHnSourcesById = new Map();
   const actionRecordsById = new Map();
   const visitRequestUsage = { used: 0 };
@@ -133,6 +149,11 @@ export function createApplication({
       await loadUserPreferencesAndRecover().catch(() => {});
       applicationView.update({ phase: "idle", error: null });
     })().catch((error) => {
+      applicationView.trace({
+        type: "app.setup_failed",
+        status: "failed",
+        message: workshop.cleanError(error),
+      });
       applicationView.update({
         phase: "setup",
         error: workshop.cleanError(error),
@@ -185,6 +206,7 @@ export function createApplication({
         applicationView.trace({
           type: "app.user_preferences_recovered",
           briefingId: pending.task.id,
+          operationId: pending.task.lastOperationId,
           toolCallId: pending.callId,
           checkpointId: pending.checkpointId ?? null,
           agentRunId: pending.agent?.checkpoint?.originalRunId,
@@ -222,13 +244,17 @@ export function createApplication({
         name: "list_stories",
         description: hnToolDeclaration.description,
         parameters: hnToolDeclaration.inputSchema,
-        async execute(_id, args, signal) {
+        async execute(callId, args, signal) {
           if (args.count > currentTask.options.count)
             throw new HarnessError(
               "HN_COUNT",
               `This briefing allows at most ${currentTask.options.count} HN records per listing.`,
             );
-          const response = await workshop.listStories(args, signal);
+          const response = await workshop.listStories(
+            args,
+            signal,
+            sourceObservation(currentTask, callId),
+          );
           if (response.isError) return response;
           const batch = response.structuredContent;
           if (
@@ -254,6 +280,9 @@ export function createApplication({
           applicationView.trace({
             type: "app.hn_observation",
             briefingId: currentTask.id,
+            toolCallId: callId,
+            operationId: currentTask.lastOperationId,
+            actor: "tool",
             requested: args.count,
             returned: batch.records.length,
             complete: batch.completeForRequestedScope,
@@ -270,7 +299,7 @@ export function createApplication({
         name: "read_skill",
         description: "Load the complete hn-briefing recipe when it is useful.",
         parameters: strictObjectSchema({ name: { const: "hn-briefing" } }),
-        async execute() {
+        async execute(callId) {
           const recipe = await readFile(
             new URL("../skills/hn-briefing.md", import.meta.url),
             "utf8",
@@ -278,6 +307,9 @@ export function createApplication({
           applicationView.trace({
             type: "app.skill_loaded",
             briefingId: currentTask.id,
+            toolCallId: callId,
+            operationId: currentTask.lastOperationId,
+            actor: "tool",
             name: "hn-briefing",
             content: recipe,
           });
@@ -348,6 +380,18 @@ export function createApplication({
     ];
   }
 
+  /** Correlate actual source boundaries without giving diagnostics authority. */
+  function sourceObservation(task, toolCallId) {
+    return {
+      taskId: task.id,
+      briefingId: task.id,
+      agentRunId: task.agent?.active?.id,
+      operationId: task.lastOperationId,
+      toolCallId,
+      notify: (entry) => applicationView.trace(entry),
+    };
+  }
+
   /** Saved user-preferences enter this request without changing stored history. */
   async function prepareBriefingContext(messages) {
     const context = {
@@ -398,6 +442,7 @@ export function createApplication({
       applicationView.trace({
         type: "app.permission",
         briefingId: currentTask.id,
+        operationId: currentTask.lastOperationId,
         toolCallId: toolCall.id,
         decision: "allowed for this briefing",
         tool: toolCall.name,
@@ -447,6 +492,8 @@ export function createApplication({
     applicationView.trace({
       type: "app.user_preferences_saved",
       briefingId: currentTask.id,
+      operationId: currentTask.lastOperationId,
+      actor: "tool",
       toolCallId: callId,
       tool: proposal.toolName,
       result: saved,
@@ -483,7 +530,10 @@ export function createApplication({
   async function prepareAgent(signal) {
     const task = currentTask;
     producerAgent?.assertPromptReady();
-    const hnToolDeclaration = await workshop.discover(signal);
+    const hnToolDeclaration = await workshop.discover(
+      signal,
+      sourceObservation(task),
+    );
     const model = {
       id: workshop.current.inference.selection.modelId,
       api: "openai-completions",
@@ -574,12 +624,24 @@ export function createApplication({
       );
     const { task, role } = owner;
     if (event.type === "agent_start") task.runIds.add(event.agentRunId);
+    if (event.type === "turn_start") task.currentTurn = event.turn;
     if (
       event.type === "tool_execution_start" &&
       !task.controller.signal.aborted
     )
       applicationView.update({ phase: `tool: ${event.toolName}` });
-    applicationView.acceptAgentEvent(event, role, task.id);
+    applicationView.acceptAgentEvent(
+      {
+        ...event,
+        ...(event.type === "agent_start" ? { id: event.agentRunId } : {}),
+        ...(!["agent_start", "turn_start"].includes(event.type) &&
+        event.message?.role !== "user"
+          ? { operationId: task.lastOperationId }
+          : {}),
+      },
+      role,
+      task.id,
+    );
   }
 
   /** A reviewer is a second decision-making context, sharing the same budget. */
@@ -632,11 +694,19 @@ export function createApplication({
     applicationView.trace({
       ...event,
       type: `app.${event.type}`,
+      requestKind: event.role,
       briefingId: task.id,
+      agentRunId: task.agent?.active?.id,
+      turn: task.currentTurn,
     });
     applicationView.update({
       requestsUsed: visitRequestUsage.used,
-      ...(currentTask === task ? { recovery: task.recovery ?? null } : {}),
+      ...(currentTask === task
+        ? {
+            recovery: task.recovery ?? null,
+            recoveryOperationId: task.lastOperationId ?? null,
+          }
+        : {}),
     });
   }
 
@@ -666,6 +736,7 @@ export function createApplication({
       applicationView.trace({
         type: "app.fixed_source_call",
         briefingId: currentTask.id,
+        toolCallId: call.id,
         name: call.name,
         args: prepared.args,
         chosenBy: "application",
@@ -770,6 +841,7 @@ export function createApplication({
     return {
       checkpointId: checkpoint.id,
       briefingId: task.id,
+      operationId: task.failedOperationId ?? task.lastOperationId ?? null,
       role: task.role,
       available: reason === null,
       reason,
@@ -854,6 +926,7 @@ export function createApplication({
       error: null,
       resume: null,
       recovery: null,
+      recoveryOperationId: null,
       ...(kind === "briefing"
         ? {
             cards: [],
@@ -874,6 +947,7 @@ export function createApplication({
       applicationView.message("user", task.text, { briefingId: task.id });
     applicationView.trace({
       type: `app.${kind}_start`,
+      id: task.id,
       briefingId: task.id,
       trigger: data.trigger || "manual",
       options: task.options,
@@ -971,6 +1045,17 @@ export function createApplication({
         clearTimeout(timer);
         signal.removeEventListener("abort", onAbort);
         pendingApproval = null;
+        if (error)
+          applicationView.trace({
+            type: "app.approval_ended",
+            briefingId: currentTask.id,
+            operationId: currentTask.lastOperationId,
+            approvalId: id,
+            toolCallId: callId,
+            status: signal.aborted ? "cancelled" : "failed",
+            code: error.code,
+            message: workshop.cleanError(error),
+          });
         applicationView.update({
           approval: null,
           phase: signal.aborted ? "stopping" : "running",
@@ -994,6 +1079,7 @@ export function createApplication({
       pendingApproval = {
         id,
         taskId: currentTask.id,
+        callId,
         finish,
         expiresAt: now() + timeout,
       };
@@ -1020,6 +1106,7 @@ export function createApplication({
       applicationView.trace({
         type: "app.approval_requested",
         briefingId: currentTask.id,
+        operationId: currentTask.lastOperationId,
         approvalId: id,
         toolCallId: callId,
         tool: proposal.toolName,
@@ -1064,6 +1151,12 @@ export function createApplication({
           scheduled: { ...scheduled, status: "started" },
         });
       } catch (error) {
+        applicationView.trace({
+          type: "app.schedule_failed",
+          scheduleId: id,
+          status: "failed",
+          message: workshop.cleanError(error),
+        });
         applicationView.update({
           scheduled: {
             ...scheduled,
@@ -1080,10 +1173,16 @@ export function createApplication({
   function cancelSchedule() {
     clearTimeout(scheduledBriefingTimer);
     scheduledBriefingTimer = null;
-    if (applicationView.state.scheduled?.status === "scheduled")
+    if (applicationView.state.scheduled?.status === "scheduled") {
+      applicationView.trace({
+        type: "app.schedule_cancelled",
+        scheduleId: applicationView.state.scheduled.id,
+        status: "cancelled",
+      });
       applicationView.update({
         scheduled: { ...applicationView.state.scheduled, status: "cancelled" },
       });
+    }
   }
 
   /** Every trigger reaches this same validated action boundary. */
@@ -1219,6 +1318,12 @@ export function createApplication({
       if (!activeTask || data.briefingId !== activeTask.id)
         throw new HarnessError("STALE_RUN", "This activity has already ended.");
       cancelSchedule();
+      applicationView.trace({
+        type: "app.cancel_requested",
+        briefingId: activeTask.id,
+        operationId: activeTask.lastOperationId,
+        status: "cancelled",
+      });
       activeTask.controller.abort();
       applicationView.update({ phase: "stopping" });
       return { stopping: true };
@@ -1240,6 +1345,9 @@ export function createApplication({
       applicationView.trace({
         type: "app.approval_decision",
         briefingId: pendingApproval.taskId,
+        operationId: currentTask.lastOperationId,
+        toolCallId: pendingApproval.callId,
+        actor: "user",
         approvalId: pendingApproval.id,
         decision: data.accepted ? "approved" : "denied",
         scope: data.accepted && data.allowForRun ? "briefing" : "once",
@@ -1315,6 +1423,7 @@ export function createApplication({
         queued: [],
         resume: null,
         recovery: null,
+        recoveryOperationId: null,
       });
       applicationView.message(
         "status",
@@ -1380,6 +1489,16 @@ export function createApplication({
           entry.error = workshop.cleanError(error);
           entry.code = error.code ?? "INVALID_ACTION";
           Object.assign(entry, publicActionField(error));
+          applicationView.trace({
+            type: "app.action_rejected",
+            briefingId: currentTask?.id,
+            actionType: input.type,
+            actionId: input.id,
+            status: "failed",
+            code: entry.code,
+            message: entry.error,
+            ...publicActionField(error),
+          });
           // Invalid data never enters conversation history or changes a task.
           if (input.type === "run" && error.code !== "INVALID_ACTION") {
             const briefingId =
@@ -1418,7 +1537,11 @@ export function createApplication({
       task.controller.abort();
       await task.promise.catch(() => {});
     }
-    await workshop.close();
+    try {
+      await workshop.close();
+    } finally {
+      await applicationView.close();
+    }
   }
 
   return {

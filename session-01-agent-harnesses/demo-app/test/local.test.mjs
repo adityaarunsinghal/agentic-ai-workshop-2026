@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { createApplication } from "../agent/app.mjs";
 import { createLocalWorkshop } from "../local/workshop.mjs";
 import { createLocalStore } from "../local/store.mjs";
@@ -26,7 +27,7 @@ function application(t, options = {}) {
   const app = createApplication({ workshop });
   t.after(async () => {
     await app.close();
-    app.view.close();
+    await app.view.close();
   });
   return app;
 }
@@ -53,6 +54,20 @@ async function until(read) {
   throw new Error("Expected local state did not arrive.");
 }
 
+async function records(app, type) {
+  await app.view.execution.flush();
+  const matches = [];
+  let cursor;
+  do {
+    const page = app.view.execution.list({ view: "protocol", limit: 100, cursor });
+    for (const entry of page.records)
+      if (entry.type === type)
+        matches.push(await app.view.execution.get(entry.id));
+    cursor = page.nextCursor;
+  } while (cursor);
+  return matches.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+}
+
 test("the fixture runs discovery, tools and complete observations without a network", async (t) => {
   const app = application(t);
   const state = await run(app);
@@ -62,12 +77,10 @@ test("the fixture runs discovery, tools and complete observations without a netw
   assert.equal(state.requestsUsed, 4);
   assert.equal(state.cards.length, 3);
   assert.deepEqual(
-    state.trace
-      .filter((e) => e.type === "tool_execution_start")
-      .map((e) => e.toolName),
+    (await records(app, "tool_execution_start")).map((e) => e.toolName),
     ["read_skill", "list_stories", "propose_briefing"],
   );
-  const requests = state.trace.filter((e) => e.type === "app.request_start");
+  const requests = await records(app, "app.request_start");
   const last = requests.at(-1).payload.messages;
   assert.ok(
     last.some((m) => m.role === "tool" && m.content.includes("fixture-hn-1")),
@@ -80,7 +93,7 @@ test("fixed control fetches before its one model request", async (t) => {
   const state = await run(app, { control: "fixed" });
   assert.equal(state.lastOutcome.status, "completed");
   assert.equal(state.requestsUsed, 1);
-  const request = state.trace.find((e) => e.type === "app.request_start");
+  const [request] = await records(app, "app.request_start");
   assert.equal(request.payload.tool_choice, "none");
   assert.ok(
     request.payload.messages[1].content.includes("fixedWorkflowEvidence"),
@@ -117,7 +130,7 @@ test("saved context and the current override are separate", async (t) => {
   await action(app, "approve", { approvalId: approval.id, accepted: true });
   await app.idle;
   const state = await run(app, { topic: "agent tools" });
-  const request = state.trace.find((e) => e.type === "app.request_start");
+  const [request] = await records(app, "app.request_start");
   const context = JSON.parse(
     request.payload.messages[1].content.split("\n").slice(1).join("\n"),
   );
@@ -134,8 +147,8 @@ test("the reviewer receives its own context within the shared budget", async (t)
   const state = await run(app, { reviewer: true });
   assert.equal(state.lastOutcome.status, "completed");
   assert.equal(state.requestsUsed, 5);
-  const review = state.trace.find(
-    (e) => e.type === "app.request_start" && e.role === "reviewer",
+  const review = (await records(app, "app.request_start")).find(
+    (e) => e.role === "reviewer",
   );
   assert.equal(review.payload.tools.length, 0);
   assert.ok(review.payload.messages[0].content.startsWith("Review an HN"));
@@ -268,9 +281,9 @@ test("the real HN adapter reports losses through actual MCP calls", async (t) =>
   assert.equal(urls.length, 3);
 });
 
-test("local preferences survive reopening and reject a stale writer", () => {
-  const directory = resolve(".local/test-runs", randomUUID());
-  mkdirSync(directory, { recursive: true });
+test("local preferences survive reopening and reject a stale writer", (t) => {
+  const directory = mkdtempSync(resolve(tmpdir(), "harness-preferences-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
   const filename = resolve(directory, "preferences.sqlite");
   const first = createLocalStore(filename);
   const value = emptyUserPreferences();

@@ -11,7 +11,6 @@ export const RESOURCE_LIMITS_FOR_HARNESS_TESTING = Object.freeze({
   contextBytes: 1024 * 1024,
   userPreferencesBytes: 256 * 1024,
   userPreferencesEntries: 50,
-  traceBytes: 12 * 1024 * 1024,
   modelMs: 90000,
   brokerAttempts: 3,
   recoveryPollMs: 500,

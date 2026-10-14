@@ -211,6 +211,7 @@ function navigation() {
         "agent/workshop.mjs",
         "support/stream.mjs",
         "support/recovery.mjs",
+        "support/execution-log.mjs",
         "support/user-preferences.mjs",
         "support/limits.mjs",
         "ui/view.mjs",

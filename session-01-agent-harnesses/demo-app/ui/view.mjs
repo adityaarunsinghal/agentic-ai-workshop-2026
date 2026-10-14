@@ -10,6 +10,110 @@ import { randomUUID } from "node:crypto";
 import { RESOURCE_LIMITS_FOR_HARNESS_TESTING } from "../support/limits.mjs";
 import { publicActionField } from "../support/action-fields.mjs";
 import { safeErrorMetadata } from "../support/recovery.mjs";
+import { createExecutionLog } from "../support/execution-log.mjs";
+
+const recentExecutionLimit = 50;
+
+/** Labels describe observed work. The original event type stays in each record. */
+function describeExecution(entry) {
+  const type = entry.type ?? entry.kind;
+  const role = entry.role ?? entry.agentRole;
+  const messageRole = entry.message?.role;
+  const actor =
+    entry.actor ??
+    (messageRole === "user"
+      ? "user"
+      : messageRole === "assistant" || type?.startsWith("app.request_")
+        ? "model"
+        : messageRole === "toolResult" || type?.startsWith("tool_execution_")
+          ? "tool"
+          : "harness");
+  const labels = {
+    "app.briefing_start": "Briefing started",
+    "app.briefing_end": "Briefing ended",
+    "app.briefing_resume": "Briefing resumed",
+    "app.request_start": `Model request${role ? ` · ${role}` : ""}`,
+    "app.request_end": "Model request ended",
+    agent_start: `Run started${role ? ` · ${role}` : ""}`,
+    agent_end: `Run ended${role ? ` · ${role}` : ""}`,
+    turn_start: `Turn ${entry.turn ?? ""} started`,
+    turn_end: `Turn ${entry.turn ?? ""} ended`,
+    message_end:
+      messageRole === "assistant"
+        ? "Model response"
+        : messageRole === "toolResult"
+          ? `${entry.message.toolName} observation`
+          : "Input delivered",
+    tool_execution_start: `Tool · ${entry.toolName}`,
+    tool_execution_end: `Tool ended · ${entry.toolName}`,
+    tool_execution_update: `Tool progress · ${entry.toolName}`,
+    "app.hn_observation": `HN observation · ${entry.returned} records`,
+    "app.skill_loaded": "Skill loaded · hn-briefing",
+    "app.fixed_source_call": "Harness selected HN lookup",
+    "app.approval_requested": "Approval requested",
+    "app.approval_decision": `Approval ${entry.decision}`,
+    "app.approval_ended": "Approval ended",
+    "app.permission": "Permission checked",
+    "app.user_preferences_start": "Preferences change started",
+    "app.user_preferences_end": "Preferences change ended",
+    "app.user_preferences_saved": "Preferences saved",
+    "app.user_preferences_recovered": "Preferences save confirmed",
+    "app.input_queued": "Input queued",
+    "app.input_archived": "Input not executed",
+    "app.input_rejected": "Input rejected",
+    "app.recovery": "Request status",
+    "app.recovery_status_unavailable": "Request status unavailable",
+    "app.context_rejected": "Request context rejected",
+    "app.cancel_requested": "Cancellation requested",
+    "app.action_rejected": "Action rejected",
+    "app.scheduled": "Briefing scheduled",
+    "app.schedule_failed": "Scheduled briefing could not start",
+    "app.schedule_cancelled": "Scheduled briefing cancelled",
+    "app.setup_failed": "Visit setup failed",
+    "app.user_preferences_error": "Preferences operation failed",
+  };
+  return {
+    actor,
+    taskId: entry.taskId ?? entry.briefingId,
+    toolCallId: entry.toolCallId ?? entry.message?.toolCallId,
+    status:
+      entry.status ??
+      entry.outcome?.status ??
+      (entry.isError ||
+      entry.message?.isError ||
+      /_(?:rejected|failed)$/.test(type ?? "") ||
+      type === "app.recovery_status_unavailable"
+        ? "failed"
+        : type === "app.approval_requested"
+          ? "waiting"
+          : type === "app.approval_decision"
+            ? entry.decision
+            : type === "app.hn_observation" && !entry.complete
+              ? "partial"
+              : type?.endsWith("_start")
+                ? "running"
+                : "completed"),
+    label: entry.label ?? labels[type] ?? type,
+  };
+}
+
+/** Apply the environment's secret redaction only to the diagnostic copy. */
+function cleanDiagnostic(value, clean, seen = new WeakSet()) {
+  if (typeof value === "string") return clean(value);
+  if (!value || typeof value !== "object") return value;
+  if (seen.has(value)) return "[circular]";
+  seen.add(value);
+  const result = Array.isArray(value)
+    ? value.map((item) => cleanDiagnostic(item, clean, seen))
+    : Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [
+          key,
+          cleanDiagnostic(item, clean, seen),
+        ]),
+      );
+  seen.delete(value);
+  return result;
+}
 
 /** Only public fields enter this view; provider replay stays in Agent state. */
 function publicMessage(message) {
@@ -24,7 +128,17 @@ function publicMessage(message) {
   };
 }
 
-export function createView(initial) {
+export function createView(
+  initial = {},
+  { directory, clean = (value) => value } = {},
+) {
+  const execution = createExecutionLog({
+    directory,
+    scopeId: initial.visitId ?? initial.sessionId ?? randomUUID(),
+    initialEntries: (initial.trace ?? []).map((entry) =>
+      cleanDiagnostic(entry, clean),
+    ),
+  });
   const state = {
     revision: 0,
     phase: "initializing",
@@ -38,14 +152,23 @@ export function createView(initial) {
     requestsUsed: 0,
     recovery: null,
     recoverySupported: false,
+    recoveryOperationId: null,
     resume: null,
     briefings: [],
     limits: RESOURCE_LIMITS_FOR_HARNESS_TESTING,
     ...initial,
+    trace: execution.recent({ limit: recentExecutionLimit }),
+    execution: execution.summary(),
   };
   const readers = new Set();
   const assistants = new Map();
-  let traceBytes = 0;
+  const requestRecords = new Map();
+  const requestSummaries = new Map();
+  const toolRecords = new Map();
+  const pendingSpans = new Map();
+  let capturing = false,
+    executionSignature = "",
+    closing;
   let pendingText = null,
     timer = null;
 
@@ -56,7 +179,14 @@ export function createView(initial) {
     ) {
       readers.delete(response);
       response.destroy();
-    } else response.write(frame);
+    } else {
+      try {
+        response.write(frame);
+      } catch {
+        readers.delete(response);
+        response.destroy();
+      }
+    }
   }
 
   function send(kind, data) {
@@ -66,9 +196,27 @@ export function createView(initial) {
     for (const reader of readers) write(reader, frame);
   }
 
+  function syncExecution() {
+    state.trace = execution.recent({ limit: recentExecutionLimit });
+    state.execution = {
+      ...execution.summary(),
+      requests: [...requestSummaries.values()],
+    };
+    const data = { trace: state.trace, execution: state.execution };
+    const signature = JSON.stringify(data);
+    if (signature !== executionSignature) {
+      executionSignature = signature;
+      send("execution", data);
+    }
+  }
+  const stopObservingExecution = execution.subscribe(() => {
+    if (!capturing) syncExecution();
+  });
+
   function flush() {
     clearTimeout(timer);
     timer = null;
+    syncExecution();
     if (!pendingText) return;
     const { index, text } = pendingText;
     const offset = state.chat[index].text.length;
@@ -131,23 +279,114 @@ export function createView(initial) {
 
   function trace(entry) {
     flush();
-    const record = { id: randomUUID(), at: new Date().toISOString(), ...entry };
-    const bytes = Buffer.byteLength(JSON.stringify(record));
-    if (traceBytes + bytes > RESOURCE_LIMITS_FOR_HARNESS_TESTING.traceBytes)
-      throw new Error(
-        "The complete trace reached its limit. Start a new workshop visit.",
-      );
-    traceBytes += bytes;
-    state.trace.push(record);
-    send("trace", { entry: record });
+    capturing = true;
+    try {
+      return recordTrace(entry);
+    } catch {
+      return execution.record({
+        type: "execution.capture_error",
+        actor: "harness",
+        status: "failed",
+        label: "A diagnostic entry could not be captured",
+      });
+    } finally {
+      capturing = false;
+      syncExecution();
+    }
+  }
+
+  function recordTrace(entry) {
+    const record = cleanDiagnostic(
+      {
+        id: randomUUID(),
+        at: new Date().toISOString(),
+        ...entry,
+        ...describeExecution(entry),
+      },
+      clean,
+    );
+    const toolKey = `${record.taskId}:${record.toolCallId}`;
+    if (record.type === "app.request_start")
+      record.label =
+        requestSummaries.get(record.operationId)?.label ??
+        `Request ${requestSummaries.size + 1}${record.role ? ` · ${record.role}` : ""}`;
+    record.parentId ??=
+      toolRecords.get(toolKey) ??
+      requestRecords.get(record.operationId) ??
+      record.agentRunId ??
+      record.taskId;
+    if (record.parentId === record.id)
+      record.parentId =
+        record.taskId !== record.id ? record.taskId : undefined;
+    const summary = execution.record(record);
+    if (record.type === "app.request_start") {
+      requestRecords.set(record.operationId, record.id);
+      requestSummaries.set(record.operationId, summary);
+    }
+    if (record.type === "tool_execution_start")
+      toolRecords.set(toolKey, record.id);
+
+    // Only identifiers and timestamps are retained here. Results live on disk.
+    const spanKey =
+      record.type?.startsWith("app.request_")
+        ? `request:${record.operationId}`
+        : record.type?.startsWith("tool_execution_")
+          ? `tool:${toolKey}`
+          : record.type?.startsWith("mcp.request_")
+            ? `mcp:${record.mcpRequestId}`
+            : record.type?.startsWith("app.approval_")
+              ? `approval:${record.approvalId}`
+              : null;
+    if (
+      spanKey &&
+      (record.type.endsWith("_start") || record.type === "app.approval_requested")
+    )
+      pendingSpans.set(spanKey, {
+        id: record.id,
+        at: record.at,
+        type: record.type,
+        taskId: record.taskId,
+      });
+    if (
+      spanKey &&
+      (record.type.endsWith("_end") ||
+        ["app.approval_decision", "app.approval_ended"].includes(record.type))
+    ) {
+      const start = pendingSpans.get(spanKey);
+      if (start) {
+        const updated = execution.update(start.id, {
+          status: record.status,
+          endedAt: record.at,
+          durationMs: Math.max(0, Date.parse(record.at) - Date.parse(start.at)),
+          endRecordId: record.id,
+        });
+        if (record.type === "app.request_end")
+          requestSummaries.set(record.operationId, updated);
+      }
+      pendingSpans.delete(spanKey);
+    }
+    if (record.type === "agent_end")
+      for (const [key, start] of pendingSpans)
+        if (start.taskId === record.taskId && start.type === "tool_execution_start") {
+          execution.update(start.id, {
+            status: "unconfirmed",
+            endRecordId: record.id,
+            message: "The run ended without a completed tool observation.",
+          });
+          pendingSpans.delete(key);
+        }
+    return summary;
   }
 
   /** Application output consumes the same lifecycle shown in the source. */
-  function acceptAgentEvent(event, actor, briefingId) {
-    const key = `${actor}:${event.agentRunId}`;
-    const common = { actor, briefingId, agentRunId: event.agentRunId };
+  function acceptAgentEvent(event, role, briefingId) {
+    const key = `${role}:${event.agentRunId}`;
+    const common = { agentRole: role, briefingId, agentRunId: event.agentRunId };
     if (event.type === "message_start" && event.message.role === "assistant") {
-      assistants.set(key, message(actor, "", { ...common, complete: false }));
+      assistants.set(
+        key,
+        message(role, "", { ...common, actor: role, complete: false }),
+      );
       return;
     }
     if (event.type === "message_update") {
@@ -182,14 +421,20 @@ export function createView(initial) {
         });
       trace({
         ...common,
+        ...event,
         type: event.type,
         message: publicMessage(event.message),
       });
       return;
     }
     if (event.type === "message_start") return;
-    const { messages, message: ignored, ...safe } = event;
-    trace({ ...common, ...safe });
+    const { messages, message: sourceMessage, ...safe } = event;
+    trace({
+      ...common,
+      ...safe,
+      ...(sourceMessage ? { message: publicMessage(sourceMessage) } : {}),
+      ...(messages ? { messages: messages.map(publicMessage) } : {}),
+    });
   }
 
   function connect(response) {
@@ -218,10 +463,15 @@ export function createView(initial) {
   heartbeat.unref();
 
   function close() {
-    clearInterval(heartbeat);
-    clearTimeout(timer);
-    for (const reader of readers) reader.end();
-    readers.clear();
+    closing ??= (async () => {
+      clearInterval(heartbeat);
+      clearTimeout(timer);
+      stopObservingExecution();
+      for (const reader of readers) reader.end();
+      readers.clear();
+      await execution.close();
+    })();
+    return closing;
   }
 
   return {
@@ -230,6 +480,7 @@ export function createView(initial) {
     message,
     text,
     trace,
+    execution,
     acceptAgentEvent,
     flush,
     connect,
@@ -315,6 +566,30 @@ export async function serveApp(
       }
       if (request.method === "GET" && url.pathname === "/api/events")
         return application.view.connect(response);
+      // Observer reads never initialize work, poll a provider or record a trace.
+      if (request.method === "GET" && url.pathname === "/api/execution")
+        return json(
+          200,
+          application.view.execution.list({
+            view: url.searchParams.get("view") === "protocol" ? "protocol" : "teaching",
+            cursor: url.searchParams.get("cursor") || undefined,
+            limit: Math.max(
+              1,
+              Math.min(100, Number(url.searchParams.get("limit")) || 50),
+            ),
+            query: url.searchParams.get("query") || undefined,
+            taskId: url.searchParams.get("taskId") || undefined,
+          }),
+        );
+      if (
+        request.method === "GET" &&
+        url.pathname.startsWith("/api/execution/")
+      ) {
+        const record = await application.view.execution.get(
+          decodeURIComponent(url.pathname.slice("/api/execution/".length)),
+        );
+        return json(record ? 200 : 404, { record });
+      }
       if (request.method === "GET" && url.pathname === "/api/action")
         return json(200, application.actionStatus(url.searchParams.get("id")));
       if (request.method === "GET" && url.pathname === "/api/sources")
@@ -375,7 +650,7 @@ export async function serveApp(
     port: server.address().port,
     async close() {
       await application.close();
-      application.view.close();
+      await application.view.close();
       server.closeAllConnections();
       await new Promise((resolve) => server.close(resolve));
     },

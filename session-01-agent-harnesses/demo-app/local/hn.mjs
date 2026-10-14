@@ -12,6 +12,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { HarnessError } from "../agent/pi-mini.mjs";
+import { observeMcp } from "../agent/workshop.mjs";
 import { requireHnRecord } from "../support/user-preferences.mjs";
 import { fixtureRecords } from "./fixture.mjs";
 
@@ -160,25 +161,56 @@ export function createLocalHn({ fixture, fetcher = fetch }) {
     };
   });
   let connected;
-  async function discover(signal) {
+  async function discover(signal, observation) {
     connected ??= (async () => {
       const [clientTransport, serverTransport] =
         InMemoryTransport.createLinkedPair();
       await server.connect(serverTransport);
-      await client.connect(clientTransport);
+      await observeMcp(
+        observation,
+        {
+          method: "initialize",
+          transport: "in-memory",
+          actor: "harness",
+          source: fixture ? "fixture" : "HN API",
+        },
+        () => client.connect(clientTransport),
+      );
     })();
     await connected;
-    const catalog = await client.listTools({}, { signal, timeout: 5000 });
+    const catalog = await observeMcp(
+      observation,
+      {
+        method: "tools/list",
+        transport: "in-memory",
+        actor: "harness",
+        source: fixture ? "fixture" : "HN API",
+        request: {},
+      },
+      () => client.listTools({}, { signal, timeout: 5000 }),
+    );
     return catalog.tools.find((tool) => tool.name === "list_stories");
   }
   return {
     discover,
-    async listStories(args, signal) {
-      await discover(signal);
-      return client.callTool(
-        { name: "list_stories", arguments: args },
-        undefined,
-        { signal, timeout: 30000 },
+    async listStories(args, signal, observation) {
+      await discover(signal, observation);
+      const request = { name: "list_stories", arguments: args };
+      return observeMcp(
+        observation,
+        {
+          method: "tools/call",
+          transport: "in-memory",
+          actor: "tool",
+          source: fixture ? "fixture" : "HN API",
+          request,
+        },
+        () =>
+          client.callTool(
+            request,
+            undefined,
+            { signal, timeout: 30000 },
+          ),
       );
     },
     async close() {

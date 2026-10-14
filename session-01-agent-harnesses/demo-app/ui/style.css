@@ -547,6 +547,29 @@ input[type="checkbox"] {
 .request-tools li {
   margin-top: 3px;
 }
+.trace-operation {
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+}
+.trace-operation:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+.execution-filters {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+.execution-filters label {
+  flex: 1 1 160px;
+}
 .request-outcome {
   color: var(--accent);
   font-size: 10px;
@@ -586,7 +609,7 @@ details[open] > summary {
   border-color: var(--ink);
   color: var(--background);
 }
-.trace-badge[data-role="agent"] {
+.trace-badge[data-role="model"] {
   border-color: var(--accent);
   color: var(--accent);
 }
