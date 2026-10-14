@@ -5,7 +5,8 @@ import { createLocalWorkshop } from "../local/workshop.mjs";
 import { serveApp } from "../ui/view.mjs";
 
 const mode = process.argv[2];
-if (mode === "live" && existsSync(".env")) process.loadEnvFile(".env");
+if (["live", "development"].includes(mode) && existsSync(".env"))
+  process.loadEnvFile(".env");
 let workshop;
 try {
   workshop = createLocalWorkshop({ mode });
@@ -16,12 +17,14 @@ try {
   });
   await application.initialize();
   console.info(
-    `${mode === "fixture" ? "Synthetic preview" : "Local OpenRouter app"}: http://127.0.0.1:${runtime.port}`,
+    `${mode === "fixture" ? "Synthetic preview" : mode === "development" ? "Local workshop development" : "Local OpenRouter app"}: http://127.0.0.1:${runtime.port}`,
   );
   console.info(
     mode === "fixture"
       ? "Scripted model and synthetic HN records. No inference charges."
-      : "Your configured OpenRouter account pays when you submit a request.",
+      : mode === "development"
+        ? "The workshop selects the model, pricing profile and funding. Submitting a request uses that allowance."
+        : "Your configured OpenRouter account pays when you submit a request.",
   );
   const stop = async () => {
     await runtime.close();

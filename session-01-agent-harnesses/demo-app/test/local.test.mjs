@@ -171,7 +171,7 @@ test("stop cancels an in-flight fixture request and retains the input", async (t
 });
 
 test("local modes fail before execution when hosted configuration is present", () => {
-  for (const mode of ["live", "fixture"])
+  for (const mode of ["live", "fixture", "development"])
     for (const env of [
       { WORKSHOP_RUNTIME: "hosted" },
       { WORKSHOP_RUN_TOKEN: "synthetic-hosted-token" },
@@ -187,7 +187,7 @@ test("local modes fail before execution when hosted configuration is present", (
   );
   assert.throws(
     () => createLocalWorkshop({ env: {} }),
-    /explicit fixture or live/,
+    /explicit fixture, live, or development/,
   );
 });
 

@@ -189,7 +189,20 @@ export function createWorkshop({
   env = process.env,
   fetcher = fetch,
   fixture = false,
+  mode = "hosted",
 } = {}) {
+  if (!["hosted", "development"].includes(mode))
+    throw new Error("Choose hosted or explicit development broker mode.");
+  const development = mode === "development";
+  if (
+    development &&
+    (fixture ||
+      env.WORKSHOP_RUNTIME === "hosted" ||
+      env.WORKSHOP_RUN_TOKEN ||
+      env.WORKSHOP_BROKER_URL ||
+      env.WORKSHOP_RUN_ID)
+  )
+    throw new Error("Development mode cannot use hosted workshop configuration or fixtures.");
   if (fixture && env.WORKSHOP_RUNTIME === "hosted")
     throw new Error("Fixture mode cannot run inside a hosted workshop visit.");
   let workshopBootstrap, hnMcpClient, hnMcpTransport, hnToolDiscoveryPromise;
@@ -198,13 +211,21 @@ export function createWorkshop({
   const inferenceOperationsById = new Map();
   // Producer and reviewer share this budget and therefore one selection.
   const inferenceSelectionsByBudget = new WeakMap();
-  const workshopRunToken = env.WORKSHOP_RUN_TOKEN;
-  const isWorkshopBrokerConfigured = Boolean(
-    env.WORKSHOP_BROKER_URL && workshopRunToken,
-  );
+  const workshopToken = development
+    ? env.WORKSHOP_DEVELOPMENT_TOKEN
+    : env.WORKSHOP_RUN_TOKEN;
+  const brokerUrl = development
+    ? env.WORKSHOP_DEVELOPMENT_URL
+    : env.WORKSHOP_BROKER_URL;
+  const isWorkshopBrokerConfigured = Boolean(brokerUrl && workshopToken?.trim());
+  if (development && !isWorkshopBrokerConfigured)
+    throw new Error(
+      "Development mode requires WORKSHOP_DEVELOPMENT_URL and WORKSHOP_DEVELOPMENT_TOKEN.",
+    );
+  let boundRunId = development ? null : env.WORKSHOP_RUN_ID;
   let workshopBrokerBaseUrl;
   if (isWorkshopBrokerConfigured) {
-    workshopBrokerBaseUrl = new URL(env.WORKSHOP_BROKER_URL);
+    workshopBrokerBaseUrl = new URL(brokerUrl);
     if (
       !["http:", "https:"].includes(workshopBrokerBaseUrl.protocol) ||
       workshopBrokerBaseUrl.username ||
@@ -213,12 +234,15 @@ export function createWorkshop({
       workshopBrokerBaseUrl.hash
     )
       throw new Error("Invalid workshop broker URL.");
+    if (development) {
+      if (workshopBrokerBaseUrl.pathname.replace(/\/+$/, "") !== "/api/development")
+        throw new Error("WORKSHOP_DEVELOPMENT_URL must end in /api/development.");
+      workshopBrokerBaseUrl.pathname = "/api/development/";
+    }
   }
 
   function redactText(text) {
-    return workshopRunToken
-      ? text.replaceAll(workshopRunToken, "[redacted]")
-      : text;
+    return workshopToken ? text.replaceAll(workshopToken, "[redacted]") : text;
   }
 
   function cleanError(error) {
@@ -233,8 +257,8 @@ export function createWorkshop({
   }
 
   /** Copy primitive values so later bootstrap reads cannot rebind a briefing. */
-  function selectedInference() {
-    const { selection, fundingMode } = workshopBootstrap?.inference ?? {};
+  function selectedInference(snapshot = workshopBootstrap) {
+    const { selection, fundingMode } = snapshot?.inference ?? {};
     if (
       !selection ||
       typeof selection.modelId !== "string" ||
@@ -284,10 +308,13 @@ export function createWorkshop({
         "SETUP",
         "Start this app through the workshop portal.",
       );
-    const response = await fetcher(new URL(path, workshopBrokerBaseUrl), {
+    const response = await fetcher(new URL(
+      development ? path.replace(/^\//, "") : path,
+      workshopBrokerBaseUrl,
+    ), {
       method,
       headers: {
-        authorization: `Bearer ${workshopRunToken}`,
+        authorization: `Bearer ${workshopToken}`,
         "x-workshop-contract-version": manifest.schemaVersion,
         ...(body === undefined ? {} : { "content-type": "application/json" }),
         ...headers,
@@ -340,7 +367,10 @@ export function createWorkshop({
     const next = await response.json();
     if (
       next.contractVersion !== manifest.schemaVersion ||
-      next.runId !== env.WORKSHOP_RUN_ID ||
+      (development
+        ? typeof next.runId !== "string" || !next.runId ||
+          (boundRunId !== null && next.runId !== boundRunId)
+        : next.runId !== boundRunId) ||
       !Number.isFinite(Date.parse(next.expiresAt))
     )
       throw new HarnessError(
@@ -350,18 +380,26 @@ export function createWorkshop({
     if (next.simulated && !fixture)
       throw new HarnessError(
         "SIMULATION",
-        "A hosted demo requires real workshop services.",
+        `A ${mode} demo requires real workshop services.`,
       );
-    if (!["hosted", "readiness"].includes(next.mode))
+    if (
+      development
+        ? next.mode !== "development"
+        : !["hosted", "readiness"].includes(next.mode)
+    )
       throw new HarnessError("CONTRACT", "Unsupported workshop mode.");
     if (
-      next.mode === "hosted" &&
+      ["hosted", "development"].includes(next.mode) &&
       !manifest.inference.models.includes(next.inference?.selection?.modelId)
     )
       throw new HarnessError(
         "MODEL",
         "Select an approved model through the portal.",
       );
+    if (development) {
+      selectedInference(next);
+      boundRunId = next.runId;
+    }
     workshopBootstrap = next;
     // HTTP negotiation leaves the strict C01 JSON body unchanged.
     supportsInferenceProfileBinding =
@@ -373,7 +411,7 @@ export function createWorkshop({
 
   function assertLive() {
     if (
-      workshopBootstrap?.mode !== "hosted" ||
+      workshopBootstrap?.mode !== mode ||
       Date.parse(workshopBootstrap.expiresAt) <= Date.now()
     )
       throw new HarnessError(
@@ -385,7 +423,7 @@ export function createWorkshop({
   async function discover(signal, observation) {
     assertLive();
     if (hnToolDiscoveryPromise) return hnToolDiscoveryPromise;
-    if (!workshopBootstrap.services.hn)
+    if (!workshopBootstrap.services?.hn)
       throw new HarnessError(
         "HN_UNAVAILABLE",
         "HN is unavailable for this app.",
@@ -397,7 +435,8 @@ export function createWorkshop({
     if (
       endpoint.origin !== workshopBrokerBaseUrl.origin ||
       endpoint.username ||
-      endpoint.password
+      endpoint.password ||
+      (development && !endpoint.pathname.startsWith("/api/development/"))
     )
       throw new HarnessError(
         "HN_ORIGIN",
@@ -407,7 +446,7 @@ export function createWorkshop({
     hnMcpTransport = new StreamableHTTPClientTransport(endpoint, {
       requestInit: {
         headers: {
-          authorization: `Bearer ${workshopRunToken}`,
+          authorization: `Bearer ${workshopToken}`,
           "x-workshop-contract-version": manifest.schemaVersion,
         },
       },
@@ -898,6 +937,7 @@ export function createWorkshop({
 
   return {
     fixture,
+    runtimeMode: development ? "development" : fixture ? "fixture" : "hosted",
     configured: isWorkshopBrokerConfigured,
     bootstrap,
     discover,

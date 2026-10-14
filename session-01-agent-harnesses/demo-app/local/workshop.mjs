@@ -9,12 +9,17 @@ import {
   createAssistantMessageEventStream,
   HarnessError,
 } from "../agent/pi-mini.mjs";
-import { providerContext, inspectableRequest } from "../agent/workshop.mjs";
+import {
+  createWorkshop,
+  providerContext,
+  inspectableRequest,
+} from "../agent/workshop.mjs";
 import { readCompletion } from "../support/stream.mjs";
 import { RESOURCE_LIMITS_FOR_HARNESS_TESTING as limits } from "../support/limits.mjs";
 import { createLocalHn } from "./hn.mjs";
 import { createLocalStore } from "./store.mjs";
 import { fixtureCompletion } from "./fixture.mjs";
+import manifest from "../workshop-app.json" with { type: "json" };
 
 export function createLocalWorkshop({
   mode,
@@ -23,8 +28,8 @@ export function createLocalWorkshop({
   storeFile,
   fixtureDelay = 0,
 } = {}) {
-  if (!["fixture", "live"].includes(mode))
-    throw new Error("Choose the explicit fixture or live local mode.");
+  if (!["fixture", "live", "development"].includes(mode))
+    throw new Error("Choose the explicit fixture, live, or development local mode.");
   if (
     env.WORKSHOP_RUNTIME === "hosted" ||
     env.WORKSHOP_RUN_TOKEN ||
@@ -34,6 +39,8 @@ export function createLocalWorkshop({
     throw new Error(
       "Local modes cannot run with hosted workshop configuration.",
     );
+  if (mode === "development")
+    return createDevelopmentWorkshop({ env, fetcher, storeFile });
   const fixture = mode === "fixture";
   const key = fixture ? null : env.OPENROUTER_API_KEY;
   const modelId = fixture ? "fixture/hn-briefing" : env.OPENROUTER_MODEL;
@@ -272,5 +279,71 @@ export function createLocalWorkshop({
     get current() {
       return boot;
     },
+  };
+}
+
+/** Use the chosen workshop connection, with local resources for absent scopes. */
+function createDevelopmentWorkshop({ env, fetcher, storeFile }) {
+  const broker = createWorkshop({ mode: "development", env, fetcher });
+  const directory = resolve(env.LOCAL_WORKDIR || ".local");
+  let source, store;
+  const localSource = () => source ??= createLocalHn({ fixture: false, fetcher });
+  const localStore = () => store ??= createLocalStore(
+    storeFile ?? resolve(directory, "preferences.sqlite"),
+  );
+  function assertDevelopment(signal) {
+    signal?.throwIfAborted();
+    if (
+      broker.current?.mode !== "development" ||
+      Date.parse(broker.current.expiresAt) <= Date.now()
+    )
+      throw new HarnessError("SESSION_EXPIRED", "An active workshop development connection is required.");
+  }
+  const hasStorage = () => broker.current?.storage?.schema === manifest.storage.schema &&
+    broker.current.storage.visitorBytes > 0;
+  return {
+    fixture: false,
+    runtimeMode: "development",
+    configured: broker.configured,
+    executionDirectory: storeFile === ":memory:"
+      ? undefined : resolve(directory, "execution", randomUUID()),
+    bootstrap: broker.bootstrap,
+    stream: broker.stream,
+    operation: broker.operation,
+    redactText: broker.redactText,
+    cleanError: broker.cleanError,
+    discover(signal, observation) {
+      assertDevelopment(signal);
+      return broker.current.services?.hn
+        ? broker.discover(signal, observation)
+        : localSource().discover(signal, observation);
+    },
+    listStories(args, signal, observation) {
+      assertDevelopment(signal);
+      return broker.current.services?.hn
+        ? broker.listStories(args, signal, observation)
+        : localSource().listStories(args, signal, observation);
+    },
+    loadUserPreferences(signal) {
+      assertDevelopment(signal);
+      return hasStorage()
+        ? broker.loadUserPreferences(signal) : localStore().load(signal);
+    },
+    saveUserPreferences(value, etag, signal) {
+      assertDevelopment(signal);
+      return hasStorage()
+        ? broker.saveUserPreferences(value, etag, signal)
+        : localStore().save(value, etag, signal);
+    },
+    async close() {
+      try {
+        await broker.close();
+      } finally {
+        try { await source?.close(); }
+        finally { store?.close(); }
+      }
+    },
+    get recoverySupported() { return broker.recoverySupported; },
+    get current() { return broker.current; },
   };
 }

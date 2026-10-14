@@ -16,6 +16,13 @@ test("diagnostics preserve empty tool-call content while redacting secrets in ev
       env: { WORKSHOP_BROKER_URL: "https://workshop.example", WORKSHOP_RUN_TOKEN: secret },
       fetcher: noNetwork,
     })],
+    ["development", () => createLocalWorkshop({
+      mode: "development", storeFile: ":memory:", fetcher: noNetwork,
+      env: {
+        WORKSHOP_DEVELOPMENT_URL: "https://workshop.example/api/development",
+        WORKSHOP_DEVELOPMENT_TOKEN: secret,
+      },
+    })],
     ["local", () => createLocalWorkshop({
       mode: "live", storeFile: ":memory:", fetcher: noNetwork,
       env: { OPENROUTER_API_KEY: secret, OPENROUTER_MODEL: "test/model" },

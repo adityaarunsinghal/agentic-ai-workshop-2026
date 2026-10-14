@@ -30,11 +30,46 @@ harness** contains fixed control, memory, scheduling and reviewer options.
 Browser refresh keeps this running preview's state. Stopping the fixture clears
 its conversation and saved preferences. Press **Ctrl+C** to stop it.
 
-### Real HN and OpenRouter responses
+### Live local work with your workshop connection
+
+Use this mode for the workshop-selected model, pricing profile and funding.
+Create a token in the portal under **Account → Local development token**.
+Add its gateway and token to this app's private `.env` or environment:
+
+```text
+WORKSHOP_DEVELOPMENT_URL=
+WORKSHOP_DEVELOPMENT_TOKEN=
+```
+
+Use the development gateway URL supplied by the workshop, ending in
+`/api/development`. Start from this app's directory:
+
+```sh
+npm run dev:development
+```
+
+Open the printed loopback address. The **Local workshop development** banner
+shows the selected funding; the header shows the broker-selected model and
+profile. Startup reads bootstrap and preferences without a model request.
+Submitting a request uses the selected workshop allowance.
+
+This mode uses the existing broker stream, request reservations, profile binding,
+recovery and complete provider replay. Bootstrap retains its real `development`
+mode and identity. Credentials stay on the server. It does not use a personal
+OpenRouter key or fall back to a hosted connection.
+
+When bootstrap does not advertise HN, the local MCP server reads the HN API.
+When it supplies no storage allowance for the HN application's schema, preferences use
+`.local/preferences.sqlite`. Advertised services keep their broker scope;
+an error does not switch them to local storage or sources. Local execution logs
+stay under `.local/execution/`. `LOCAL_WORKDIR` can select another directory.
+Code runs with this computer's permissions.
+
+### Real HN with a personal OpenRouter key
 
 This mode uses your own OpenRouter key and the exact model you select.
-Ask Adi for local-development access by replying to a workshop email, or use
-your own account. Your configured account pays for inference.
+For workshop development access, use `dev:development` above. In this personal
+mode, your configured OpenRouter account pays for inference.
 
 Copy `.env.example` to `.env` in this folder. Enter your key and an explicit
 tool-capable OpenRouter model ID in your editor:
@@ -216,7 +251,7 @@ root. For a replacement, keep the same slug and create a fresh archive.
 ### Hosted execution
 
 `npm start` is the workshop startup path. The platform supplies the broker
-configuration and visitor allowance. Local fixture and personal OpenRouter
+configuration and visitor allowance. Local fixture, development and personal OpenRouter
 modes are refused inside a hosted workshop runtime.
 
 Local `.env` values never select the hosted payer. Model choice and funding

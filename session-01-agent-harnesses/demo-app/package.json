@@ -16,6 +16,8 @@
     "dev:fixture": "node scripts/local.mjs fixture",
     "predev:local": "node scripts/check-runtime.mjs",
     "dev:local": "node scripts/local.mjs live",
+    "predev:development": "node scripts/check-runtime.mjs",
+    "dev:development": "node scripts/local.mjs development",
     "pretest": "node scripts/check-runtime.mjs",
     "test": "node --test test/*.test.mjs",
     "package:workshop": "node scripts/package.mjs",

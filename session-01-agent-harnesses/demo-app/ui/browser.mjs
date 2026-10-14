@@ -433,7 +433,13 @@ function render() {
   lastContentSignature = contentSignature;
   element("fixture").hidden = !applicationState.fixture;
   element("local-mode").hidden = applicationState.runtimeMode !== "local";
-  if (["fixture", "local"].includes(applicationState.runtimeMode))
+  element("development-mode").hidden = applicationState.runtimeMode !== "development";
+  if (applicationState.runtimeMode === "development")
+    text(
+      "development-mode",
+      `Local workshop development${applicationState.fundingMode ? ` · ${applicationState.fundingMode} funding` : ""}. The workshop selects the model and pricing profile. Code runs on this computer.`,
+    );
+  if (["fixture", "local", "development"].includes(applicationState.runtimeMode))
     text(
       "execution-boundary",
       "Pi-mini is an educational subset of Pi 1.0.0. This local process runs with your computer's permissions.",

@@ -103,7 +103,7 @@ export function createApplication({
     },
     {
       directory:
-        workshop.runtimeMode === "local"
+        ["local", "development"].includes(workshop.runtimeMode)
           ? workshop.executionDirectory
           : undefined,
       clean: workshop.redactText,
@@ -229,6 +229,7 @@ export function createApplication({
         ? { id: selection.modelId, profileId: selection.profileId }
         : null,
       usage: workshopBootstrap.usage ?? null,
+      fundingMode: workshopBootstrap.inference?.fundingMode ?? null,
       expiresAt: workshopBootstrap.expiresAt,
       recoverySupported: workshop.recoverySupported === true,
     });
@@ -715,7 +716,7 @@ export function createApplication({
     const signal = controller.signal;
     const workshopBootstrap = await workshop.bootstrap(signal);
     showBootstrap(workshopBootstrap);
-    if (!["hosted", "local", "fixture"].includes(workshopBootstrap.mode))
+    if (!["hosted", "local", "fixture", "development"].includes(workshopBootstrap.mode))
       throw new Error("Start an interactive workshop visit or local preview.");
     currentTask.budget = createBudget(visitRequestUsage, options.reviewer, () =>
       applicationView.update({ requestsUsed: visitRequestUsage.used }),
@@ -1195,7 +1196,7 @@ export function createApplication({
       await initialize();
       return { refreshed: true };
     }
-    if (!["hosted", "local", "fixture"].includes(workshop.current?.mode))
+    if (!["hosted", "local", "fixture", "development"].includes(workshop.current?.mode))
       throw new HarnessError(
         "SETUP",
         "Open an interactive workshop visit or local preview first.",
