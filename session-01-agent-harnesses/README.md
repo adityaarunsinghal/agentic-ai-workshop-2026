@@ -15,11 +15,17 @@ it, and the observation sent back to the model.
 
 Use the ordinary source projects between classes. The slides carry the
 classroom presentation.
+For setup and uploads, use the [repository quickstart](../README.md).
+The [troubleshooting guide](TROUBLESHOOTING.md) explains common failures;
+[project guidance](AGENTS.md) lists the files and checks for coding tools.
 
 ### Follow a complete request
 
 In the HN demo, select **Try the example**, then **Ask**. Open **Execution** and
 select each request in order.
+Expand a record to load its full context or observation. **Details** offers
+Simplified View and Protocol and all events; search and paging expose older
+records. These reads do not run the agent or spend inference credit.
 
 The scripted sequence loads the briefing skill, asks for HN metadata, proposes
 source cards, then returns an answer. On the next request after each tool,

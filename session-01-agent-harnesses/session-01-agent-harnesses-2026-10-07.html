@@ -3260,38 +3260,38 @@ Command exited with code 254</pre>
       <section class="slide code-walkthrough" id="slide-harness-compose"
   aria-labelledby="title-harness-compose" data-code-source="session-01-agent-harnesses/demo-app/agent/app.mjs"
   data-code-language="javascript" data-code-complete="false"
-  data-code-start="497" data-code-end="520"
-  data-code-sha256="26507614cbf6b6e4ea9a038fabd4207f8f793adb6a9ac47e1bd6caa6fbdb66cb" data-code-excerpt-sha256="909619667d15ef8e607baacc5b30c19169bd33c29309b870ec9e3c5350add4ef" hidden>
+  data-code-start="548" data-code-end="571"
+  data-code-sha256="3f576c8b47b98dc13cb2232c7794d886cf2c821983d5a59407ff1238d0f1fb05" data-code-excerpt-sha256="909619667d15ef8e607baacc5b30c19169bd33c29309b870ec9e3c5350add4ef" hidden>
   <div>
     <p class="kicker">HN application · 1/3</p>
     <h2 id="title-harness-compose">Connect the application to the harness</h2>
   </div>
   <div class="code-card">
-    <div class="code-head"><strong>app.mjs</strong><span>Lines 497-520</span></div>
-    <pre class="scrollable" tabindex="0" aria-label="app.mjs, source lines 497-520: Connect the application to the harness"><code class="hljs language-javascript"><span class="code-line" data-line="497">    <span class="hljs-keyword">const</span> producerModelStream = workshop.<span class="hljs-title function_">stream</span>({
-</span><span class="code-line" data-line="498">      <span class="hljs-attr">budget</span>: currentTask.<span class="hljs-property">budget</span>,
-</span><span class="code-line" data-line="499">      <span class="hljs-attr">role</span>: <span class="hljs-string">&quot;producer&quot;</span>,
-</span><span class="code-line" data-line="500">      <span class="hljs-attr">forceNoTools</span>: currentTask.<span class="hljs-property">options</span>.<span class="hljs-property">control</span> === <span class="hljs-string">&quot;fixed&quot;</span>,
-</span><span class="code-line" data-line="501">      <span class="hljs-attr">notify</span>: <span class="hljs-function">(<span class="hljs-params">event</span>) =&gt;</span> <span class="hljs-title function_">notifyRequest</span>(event, task),
-</span><span class="code-line" data-line="502">      <span class="hljs-attr">resumeOperationId</span>: task.<span class="hljs-property">resumeOperationId</span>,
-</span><span class="code-line" data-line="503">    });
-</span><span class="code-line" data-line="504">    <span class="hljs-keyword">if</span> (!producerAgent) {
-</span><span class="code-line" data-line="505">      producerAgent = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Agent</span>({
-</span><span class="code-line" data-line="506">        <span class="hljs-attr">initialState</span>: {
-</span><span class="code-line" data-line="507">          model,
-</span><span class="code-line" data-line="508">          <span class="hljs-attr">systemPrompt</span>: <span class="hljs-variable constant_">SYSTEM_PROMPT_FOR_HN_BRIEFING_AGENT</span>,
-</span><span class="code-line" data-line="509">          <span class="hljs-attr">tools</span>: <span class="hljs-title function_">createTools</span>(hnToolDeclaration),
-</span><span class="code-line" data-line="510">        },
-</span><span class="code-line" data-line="511">        <span class="hljs-attr">streamFn</span>: producerModelStream,
-</span><span class="code-line" data-line="512">        <span class="hljs-attr">transformContext</span>: prepareBriefingContext,
-</span><span class="code-line" data-line="513">        <span class="hljs-attr">beforeToolCall</span>: authorizeUserPreferencesChange,
-</span><span class="code-line" data-line="514">        <span class="hljs-attr">afterToolCall</span>: checkToolResult,
-</span><span class="code-line" data-line="515">        <span class="hljs-attr">finishTurn</span>: decideContinuation,
-</span><span class="code-line" data-line="516">        <span class="hljs-attr">toolExecution</span>: <span class="hljs-string">&quot;sequential&quot;</span>,
-</span><span class="code-line" data-line="517">      });
-</span><span class="code-line" data-line="518">      <span class="hljs-keyword">const</span> agent = producerAgent;
-</span><span class="code-line" data-line="519">      agent.<span class="hljs-title function_">subscribe</span>(<span class="hljs-function">(<span class="hljs-params">event</span>) =&gt;</span> <span class="hljs-title function_">acceptOwnedAgentEvent</span>(agent, event));
-</span><span class="code-line" data-line="520">    } <span class="hljs-keyword">else</span> producerAgent.<span class="hljs-property">options</span>.<span class="hljs-property">streamFn</span> = producerModelStream;
+    <div class="code-head"><strong>app.mjs</strong><span>Lines 548-571</span></div>
+    <pre class="scrollable" tabindex="0" aria-label="app.mjs, source lines 548-571: Connect the application to the harness"><code class="hljs language-javascript"><span class="code-line" data-line="548">    <span class="hljs-keyword">const</span> producerModelStream = workshop.<span class="hljs-title function_">stream</span>({
+</span><span class="code-line" data-line="549">      <span class="hljs-attr">budget</span>: currentTask.<span class="hljs-property">budget</span>,
+</span><span class="code-line" data-line="550">      <span class="hljs-attr">role</span>: <span class="hljs-string">&quot;producer&quot;</span>,
+</span><span class="code-line" data-line="551">      <span class="hljs-attr">forceNoTools</span>: currentTask.<span class="hljs-property">options</span>.<span class="hljs-property">control</span> === <span class="hljs-string">&quot;fixed&quot;</span>,
+</span><span class="code-line" data-line="552">      <span class="hljs-attr">notify</span>: <span class="hljs-function">(<span class="hljs-params">event</span>) =&gt;</span> <span class="hljs-title function_">notifyRequest</span>(event, task),
+</span><span class="code-line" data-line="553">      <span class="hljs-attr">resumeOperationId</span>: task.<span class="hljs-property">resumeOperationId</span>,
+</span><span class="code-line" data-line="554">    });
+</span><span class="code-line" data-line="555">    <span class="hljs-keyword">if</span> (!producerAgent) {
+</span><span class="code-line" data-line="556">      producerAgent = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Agent</span>({
+</span><span class="code-line" data-line="557">        <span class="hljs-attr">initialState</span>: {
+</span><span class="code-line" data-line="558">          model,
+</span><span class="code-line" data-line="559">          <span class="hljs-attr">systemPrompt</span>: <span class="hljs-variable constant_">SYSTEM_PROMPT_FOR_HN_BRIEFING_AGENT</span>,
+</span><span class="code-line" data-line="560">          <span class="hljs-attr">tools</span>: <span class="hljs-title function_">createTools</span>(hnToolDeclaration),
+</span><span class="code-line" data-line="561">        },
+</span><span class="code-line" data-line="562">        <span class="hljs-attr">streamFn</span>: producerModelStream,
+</span><span class="code-line" data-line="563">        <span class="hljs-attr">transformContext</span>: prepareBriefingContext,
+</span><span class="code-line" data-line="564">        <span class="hljs-attr">beforeToolCall</span>: authorizeUserPreferencesChange,
+</span><span class="code-line" data-line="565">        <span class="hljs-attr">afterToolCall</span>: checkToolResult,
+</span><span class="code-line" data-line="566">        <span class="hljs-attr">finishTurn</span>: decideContinuation,
+</span><span class="code-line" data-line="567">        <span class="hljs-attr">toolExecution</span>: <span class="hljs-string">&quot;sequential&quot;</span>,
+</span><span class="code-line" data-line="568">      });
+</span><span class="code-line" data-line="569">      <span class="hljs-keyword">const</span> agent = producerAgent;
+</span><span class="code-line" data-line="570">      agent.<span class="hljs-title function_">subscribe</span>(<span class="hljs-function">(<span class="hljs-params">event</span>) =&gt;</span> <span class="hljs-title function_">acceptOwnedAgentEvent</span>(agent, event));
+</span><span class="code-line" data-line="571">    } <span class="hljs-keyword">else</span> producerAgent.<span class="hljs-property">options</span>.<span class="hljs-property">streamFn</span> = producerModelStream;
 </span></code></pre>
   </div>
   <div class="walkthrough-commentary">
@@ -3303,40 +3303,40 @@ Command exited with code 254</pre>
 <section class="slide code-walkthrough" id="slide-harness-context"
   aria-labelledby="title-harness-context" data-code-source="session-01-agent-harnesses/demo-app/agent/app.mjs"
   data-code-language="javascript" data-code-complete="false"
-  data-code-start="352" data-code-end="377"
-  data-code-sha256="26507614cbf6b6e4ea9a038fabd4207f8f793adb6a9ac47e1bd6caa6fbdb66cb" data-code-excerpt-sha256="fdc9641741f0599c133a99948739d5dac1afe257857a6b8f2941f09b93a20ca9" hidden>
+  data-code-start="397" data-code-end="422"
+  data-code-sha256="3f576c8b47b98dc13cb2232c7794d886cf2c821983d5a59407ff1238d0f1fb05" data-code-excerpt-sha256="fdc9641741f0599c133a99948739d5dac1afe257857a6b8f2941f09b93a20ca9" hidden>
   <div>
     <p class="kicker">HN application · 2/3</p>
     <h2 id="title-harness-context">Bring saved preferences into this request</h2>
   </div>
   <div class="code-card">
-    <div class="code-head"><strong>app.mjs</strong><span>Lines 352-377</span></div>
-    <pre class="scrollable" tabindex="0" aria-label="app.mjs, source lines 352-377: Bring saved preferences into this request"><code class="hljs language-javascript"><span class="code-line" data-line="352">  <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">prepareBriefingContext</span>(<span class="hljs-params">messages</span>) {
-</span><span class="code-line" data-line="353">    <span class="hljs-keyword">const</span> context = {
-</span><span class="code-line" data-line="354">      <span class="hljs-attr">savedPreferences</span>: currentTask.<span class="hljs-property">memory</span>?.<span class="hljs-property">preferences</span> ?? <span class="hljs-literal">null</span>,
-</span><span class="code-line" data-line="355">      <span class="hljs-attr">currentTopicOverride</span>: currentTask.<span class="hljs-property">options</span>.<span class="hljs-property">topic</span> || <span class="hljs-literal">null</span>,
-</span><span class="code-line" data-line="356">      <span class="hljs-attr">effectiveTopic</span>:
-</span><span class="code-line" data-line="357">        currentTask.<span class="hljs-property">options</span>.<span class="hljs-property">topic</span> ||
-</span><span class="code-line" data-line="358">        currentTask.<span class="hljs-property">memory</span>?.<span class="hljs-property">preferences</span>.<span class="hljs-property">topic</span> ||
-</span><span class="code-line" data-line="359">        <span class="hljs-literal">null</span>,
-</span><span class="code-line" data-line="360">      <span class="hljs-attr">control</span>: currentTask.<span class="hljs-property">options</span>.<span class="hljs-property">control</span>,
-</span><span class="code-line" data-line="361">      <span class="hljs-attr">requestedListing</span>: {
-</span><span class="code-line" data-line="362">        <span class="hljs-attr">category</span>: currentTask.<span class="hljs-property">options</span>.<span class="hljs-property">category</span>,
-</span><span class="code-line" data-line="363">        <span class="hljs-attr">count</span>: currentTask.<span class="hljs-property">options</span>.<span class="hljs-property">count</span>,
-</span><span class="code-line" data-line="364">      },
-</span><span class="code-line" data-line="365">      <span class="hljs-attr">evidenceLevel</span>: <span class="hljs-string">&quot;HN metadata&quot;</span>,
-</span><span class="code-line" data-line="366">      ...(currentTask.<span class="hljs-property">fixedEvidence</span>
-</span><span class="code-line" data-line="367">        ? { <span class="hljs-attr">fixedWorkflowEvidence</span>: currentTask.<span class="hljs-property">fixedEvidence</span> }
-</span><span class="code-line" data-line="368">        : {}),
-</span><span class="code-line" data-line="369">    };
-</span><span class="code-line" data-line="370">    <span class="hljs-keyword">return</span> [
-</span><span class="code-line" data-line="371">      messages[<span class="hljs-number">0</span>],
-</span><span class="code-line" data-line="372">      <span class="hljs-title function_">userMessage</span>(
-</span><span class="code-line" data-line="373">        <span class="hljs-string">`Application context for this briefing:\n<span class="hljs-subst">${<span class="hljs-built_in">JSON</span>.stringify(context)}</span>`</span>,
-</span><span class="code-line" data-line="374">      ),
-</span><span class="code-line" data-line="375">      ...messages.<span class="hljs-title function_">slice</span>(<span class="hljs-number">1</span>),
-</span><span class="code-line" data-line="376">    ];
-</span><span class="code-line" data-line="377">  }
+    <div class="code-head"><strong>app.mjs</strong><span>Lines 397-422</span></div>
+    <pre class="scrollable" tabindex="0" aria-label="app.mjs, source lines 397-422: Bring saved preferences into this request"><code class="hljs language-javascript"><span class="code-line" data-line="397">  <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">prepareBriefingContext</span>(<span class="hljs-params">messages</span>) {
+</span><span class="code-line" data-line="398">    <span class="hljs-keyword">const</span> context = {
+</span><span class="code-line" data-line="399">      <span class="hljs-attr">savedPreferences</span>: currentTask.<span class="hljs-property">memory</span>?.<span class="hljs-property">preferences</span> ?? <span class="hljs-literal">null</span>,
+</span><span class="code-line" data-line="400">      <span class="hljs-attr">currentTopicOverride</span>: currentTask.<span class="hljs-property">options</span>.<span class="hljs-property">topic</span> || <span class="hljs-literal">null</span>,
+</span><span class="code-line" data-line="401">      <span class="hljs-attr">effectiveTopic</span>:
+</span><span class="code-line" data-line="402">        currentTask.<span class="hljs-property">options</span>.<span class="hljs-property">topic</span> ||
+</span><span class="code-line" data-line="403">        currentTask.<span class="hljs-property">memory</span>?.<span class="hljs-property">preferences</span>.<span class="hljs-property">topic</span> ||
+</span><span class="code-line" data-line="404">        <span class="hljs-literal">null</span>,
+</span><span class="code-line" data-line="405">      <span class="hljs-attr">control</span>: currentTask.<span class="hljs-property">options</span>.<span class="hljs-property">control</span>,
+</span><span class="code-line" data-line="406">      <span class="hljs-attr">requestedListing</span>: {
+</span><span class="code-line" data-line="407">        <span class="hljs-attr">category</span>: currentTask.<span class="hljs-property">options</span>.<span class="hljs-property">category</span>,
+</span><span class="code-line" data-line="408">        <span class="hljs-attr">count</span>: currentTask.<span class="hljs-property">options</span>.<span class="hljs-property">count</span>,
+</span><span class="code-line" data-line="409">      },
+</span><span class="code-line" data-line="410">      <span class="hljs-attr">evidenceLevel</span>: <span class="hljs-string">&quot;HN metadata&quot;</span>,
+</span><span class="code-line" data-line="411">      ...(currentTask.<span class="hljs-property">fixedEvidence</span>
+</span><span class="code-line" data-line="412">        ? { <span class="hljs-attr">fixedWorkflowEvidence</span>: currentTask.<span class="hljs-property">fixedEvidence</span> }
+</span><span class="code-line" data-line="413">        : {}),
+</span><span class="code-line" data-line="414">    };
+</span><span class="code-line" data-line="415">    <span class="hljs-keyword">return</span> [
+</span><span class="code-line" data-line="416">      messages[<span class="hljs-number">0</span>],
+</span><span class="code-line" data-line="417">      <span class="hljs-title function_">userMessage</span>(
+</span><span class="code-line" data-line="418">        <span class="hljs-string">`Application context for this briefing:\n<span class="hljs-subst">${<span class="hljs-built_in">JSON</span>.stringify(context)}</span>`</span>,
+</span><span class="code-line" data-line="419">      ),
+</span><span class="code-line" data-line="420">      ...messages.<span class="hljs-title function_">slice</span>(<span class="hljs-number">1</span>),
+</span><span class="code-line" data-line="421">    ];
+</span><span class="code-line" data-line="422">  }
 </span></code></pre>
   </div>
   <div class="walkthrough-commentary">
@@ -3348,49 +3348,50 @@ Command exited with code 254</pre>
 <section class="slide code-walkthrough" id="slide-harness-permission"
   aria-labelledby="title-harness-permission" data-code-source="session-01-agent-harnesses/demo-app/agent/app.mjs"
   data-code-language="javascript" data-code-complete="false"
-  data-code-start="383" data-code-end="417"
-  data-code-sha256="26507614cbf6b6e4ea9a038fabd4207f8f793adb6a9ac47e1bd6caa6fbdb66cb" data-code-excerpt-sha256="677e537e8ae24295d51e5229f85f0c4edf51f1578b13cf7d0a8ac551e3f0cdf9" hidden>
+  data-code-start="428" data-code-end="463"
+  data-code-sha256="3f576c8b47b98dc13cb2232c7794d886cf2c821983d5a59407ff1238d0f1fb05" data-code-excerpt-sha256="06f8b0a54ea67256d3cd8be2377f9b2135066cf099e45994862b2f1af16c630a" hidden>
   <div>
     <p class="kicker">HN application · 3/3</p>
     <h2 id="title-harness-permission">Ask before changing the user-preferences</h2>
   </div>
   <div class="code-card">
-    <div class="code-head"><strong>app.mjs</strong><span>Lines 383-417</span></div>
-    <pre class="scrollable" tabindex="0" aria-label="app.mjs, source lines 383-417: Ask before changing the user-preferences"><code class="hljs language-javascript"><span class="code-line" data-line="383">  <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">authorizeUserPreferencesChange</span>(<span class="hljs-params">{ toolCall, args }, signal</span>) {
-</span><span class="code-line" data-line="384">    <span class="hljs-keyword">if</span> (![<span class="hljs-string">&quot;save_reading_list&quot;</span>, <span class="hljs-string">&quot;remember_preferences&quot;</span>].<span class="hljs-title function_">includes</span>(toolCall.<span class="hljs-property">name</span>))
-</span><span class="code-line" data-line="385">      <span class="hljs-keyword">return</span> <span class="hljs-literal">undefined</span>;
-</span><span class="code-line" data-line="386">    <span class="hljs-keyword">if</span> (unconfirmedUserPreferencesWrite)
-</span><span class="code-line" data-line="387">      <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">HarnessError</span>(
-</span><span class="code-line" data-line="388">        <span class="hljs-string">&quot;TOOL_UNRESOLVED&quot;</span>,
-</span><span class="code-line" data-line="389">        <span class="hljs-string">&quot;Check the earlier user-preferences write before authorizing another write.&quot;</span>,
-</span><span class="code-line" data-line="390">      );
-</span><span class="code-line" data-line="391">    <span class="hljs-keyword">const</span> proposal = userPreferences.<span class="hljs-title function_">propose</span>(
-</span><span class="code-line" data-line="392">      toolCall.<span class="hljs-property">name</span>,
-</span><span class="code-line" data-line="393">      args,
-</span><span class="code-line" data-line="394">      observedHnSourcesById,
-</span><span class="code-line" data-line="395">    );
-</span><span class="code-line" data-line="396">    currentTask.<span class="hljs-property">proposals</span>.<span class="hljs-title function_">set</span>(toolCall.<span class="hljs-property">id</span>, proposal);
-</span><span class="code-line" data-line="397">    <span class="hljs-keyword">if</span> (currentTask.<span class="hljs-property">allowWrites</span>) {
-</span><span class="code-line" data-line="398">      applicationView.<span class="hljs-title function_">trace</span>({
-</span><span class="code-line" data-line="399">        <span class="hljs-attr">type</span>: <span class="hljs-string">&quot;app.permission&quot;</span>,
-</span><span class="code-line" data-line="400">        <span class="hljs-attr">briefingId</span>: currentTask.<span class="hljs-property">id</span>,
-</span><span class="code-line" data-line="401">        <span class="hljs-attr">toolCallId</span>: toolCall.<span class="hljs-property">id</span>,
-</span><span class="code-line" data-line="402">        <span class="hljs-attr">decision</span>: <span class="hljs-string">&quot;allowed for this briefing&quot;</span>,
-</span><span class="code-line" data-line="403">        <span class="hljs-attr">tool</span>: toolCall.<span class="hljs-property">name</span>,
-</span><span class="code-line" data-line="404">        args,
-</span><span class="code-line" data-line="405">      });
-</span><span class="code-line" data-line="406">      <span class="hljs-keyword">return</span> <span class="hljs-literal">undefined</span>;
-</span><span class="code-line" data-line="407">    }
-</span><span class="code-line" data-line="408">    <span class="hljs-keyword">const</span> accepted = <span class="hljs-keyword">await</span> <span class="hljs-title function_">requestApproval</span>(toolCall.<span class="hljs-property">id</span>, proposal, signal);
-</span><span class="code-line" data-line="409">    <span class="hljs-keyword">if</span> (!accepted) {
-</span><span class="code-line" data-line="410">      currentTask.<span class="hljs-property">proposals</span>.<span class="hljs-title function_">delete</span>(toolCall.<span class="hljs-property">id</span>);
-</span><span class="code-line" data-line="411">      <span class="hljs-keyword">return</span> {
-</span><span class="code-line" data-line="412">        <span class="hljs-attr">block</span>: <span class="hljs-literal">true</span>,
-</span><span class="code-line" data-line="413">        <span class="hljs-attr">reason</span>: <span class="hljs-string">&quot;The visitor declined this user-preferences change.&quot;</span>,
-</span><span class="code-line" data-line="414">      };
-</span><span class="code-line" data-line="415">    }
-</span><span class="code-line" data-line="416">    <span class="hljs-keyword">return</span> <span class="hljs-literal">undefined</span>;
-</span><span class="code-line" data-line="417">  }
+    <div class="code-head"><strong>app.mjs</strong><span>Lines 428-463</span></div>
+    <pre class="scrollable" tabindex="0" aria-label="app.mjs, source lines 428-463: Ask before changing the user-preferences"><code class="hljs language-javascript"><span class="code-line" data-line="428">  <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">authorizeUserPreferencesChange</span>(<span class="hljs-params">{ toolCall, args }, signal</span>) {
+</span><span class="code-line" data-line="429">    <span class="hljs-keyword">if</span> (![<span class="hljs-string">&quot;save_reading_list&quot;</span>, <span class="hljs-string">&quot;remember_preferences&quot;</span>].<span class="hljs-title function_">includes</span>(toolCall.<span class="hljs-property">name</span>))
+</span><span class="code-line" data-line="430">      <span class="hljs-keyword">return</span> <span class="hljs-literal">undefined</span>;
+</span><span class="code-line" data-line="431">    <span class="hljs-keyword">if</span> (unconfirmedUserPreferencesWrite)
+</span><span class="code-line" data-line="432">      <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">HarnessError</span>(
+</span><span class="code-line" data-line="433">        <span class="hljs-string">&quot;TOOL_UNRESOLVED&quot;</span>,
+</span><span class="code-line" data-line="434">        <span class="hljs-string">&quot;Check the earlier user-preferences write before authorizing another write.&quot;</span>,
+</span><span class="code-line" data-line="435">      );
+</span><span class="code-line" data-line="436">    <span class="hljs-keyword">const</span> proposal = userPreferences.<span class="hljs-title function_">propose</span>(
+</span><span class="code-line" data-line="437">      toolCall.<span class="hljs-property">name</span>,
+</span><span class="code-line" data-line="438">      args,
+</span><span class="code-line" data-line="439">      observedHnSourcesById,
+</span><span class="code-line" data-line="440">    );
+</span><span class="code-line" data-line="441">    currentTask.<span class="hljs-property">proposals</span>.<span class="hljs-title function_">set</span>(toolCall.<span class="hljs-property">id</span>, proposal);
+</span><span class="code-line" data-line="442">    <span class="hljs-keyword">if</span> (currentTask.<span class="hljs-property">allowWrites</span>) {
+</span><span class="code-line" data-line="443">      applicationView.<span class="hljs-title function_">trace</span>({
+</span><span class="code-line" data-line="444">        <span class="hljs-attr">type</span>: <span class="hljs-string">&quot;app.permission&quot;</span>,
+</span><span class="code-line" data-line="445">        <span class="hljs-attr">briefingId</span>: currentTask.<span class="hljs-property">id</span>,
+</span><span class="code-line" data-line="446">        <span class="hljs-attr">operationId</span>: currentTask.<span class="hljs-property">lastOperationId</span>,
+</span><span class="code-line" data-line="447">        <span class="hljs-attr">toolCallId</span>: toolCall.<span class="hljs-property">id</span>,
+</span><span class="code-line" data-line="448">        <span class="hljs-attr">decision</span>: <span class="hljs-string">&quot;allowed for this briefing&quot;</span>,
+</span><span class="code-line" data-line="449">        <span class="hljs-attr">tool</span>: toolCall.<span class="hljs-property">name</span>,
+</span><span class="code-line" data-line="450">        args,
+</span><span class="code-line" data-line="451">      });
+</span><span class="code-line" data-line="452">      <span class="hljs-keyword">return</span> <span class="hljs-literal">undefined</span>;
+</span><span class="code-line" data-line="453">    }
+</span><span class="code-line" data-line="454">    <span class="hljs-keyword">const</span> accepted = <span class="hljs-keyword">await</span> <span class="hljs-title function_">requestApproval</span>(toolCall.<span class="hljs-property">id</span>, proposal, signal);
+</span><span class="code-line" data-line="455">    <span class="hljs-keyword">if</span> (!accepted) {
+</span><span class="code-line" data-line="456">      currentTask.<span class="hljs-property">proposals</span>.<span class="hljs-title function_">delete</span>(toolCall.<span class="hljs-property">id</span>);
+</span><span class="code-line" data-line="457">      <span class="hljs-keyword">return</span> {
+</span><span class="code-line" data-line="458">        <span class="hljs-attr">block</span>: <span class="hljs-literal">true</span>,
+</span><span class="code-line" data-line="459">        <span class="hljs-attr">reason</span>: <span class="hljs-string">&quot;The visitor declined this user-preferences change.&quot;</span>,
+</span><span class="code-line" data-line="460">      };
+</span><span class="code-line" data-line="461">    }
+</span><span class="code-line" data-line="462">    <span class="hljs-keyword">return</span> <span class="hljs-literal">undefined</span>;
+</span><span class="code-line" data-line="463">  }
 </span></code></pre>
   </div>
   <div class="walkthrough-commentary">
