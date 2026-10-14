@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
 import { createView, serveApp } from "../ui/view.mjs";
-import { createWorkshop } from "../agent/workshop.mjs";
 import { createApplication } from "../agent/app.mjs";
+import { createWorkshop } from "../agent/workshop.mjs";
 import { createLocalWorkshop } from "../local/workshop.mjs";
 
 const noNetwork = () => { throw new Error("Unexpected external request."); };
@@ -158,9 +158,14 @@ test("execution GETs page summaries and read one sanitized record without initia
   assert.ok(page.nextCursor);
   assert.ok(page.records.every((record) => record.content === undefined));
   const older = await (await fetch(
-    `${origin}/api/execution?view=protocol&limit=2&cursor=${page.nextCursor}`,
+    `${origin}/api/execution?view=protocol&limit=2&query=request-1&taskId=task-1&cursor=${page.nextCursor}`,
   )).json();
   assert.equal(older.records.length, 1);
+  const mismatched = await fetch(
+    `${origin}/api/execution?view=protocol&limit=2&cursor=${page.nextCursor}`,
+  );
+  assert.equal(mismatched.status, 400);
+  assert.match((await mismatched.json()).error, /cursor does not match/);
   const detail = await (await fetch(
     `${origin}/api/execution/observation-0`,
   )).json();

@@ -9,7 +9,7 @@ import {
   mkdirSync, mkdtempSync, readFileSync, readdirSync, openSync, readSync,
   closeSync, existsSync, statSync,
 } from "node:fs";
-import { appendFile, mkdir, writeFile, rm } from "node:fs/promises";
+import { appendFile, mkdir, writeFile, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash, randomUUID } from "node:crypto";
@@ -21,6 +21,10 @@ const encoded = (value) => JSON.stringify(value);
 const sizeOf = (value) => Buffer.byteLength(encoded(value));
 const clip = (value, length = 180) => typeof value === "string" ? value.slice(0, length) : undefined;
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const eventTime = (value, fallback) => {
+  const time = typeof value === "number" ? value : Date.parse(value);
+  return Number.isFinite(time) ? time : fallback;
+};
 const terminalFailure = (entry) => Boolean(entry.error) ||
   ["failed", "error", "cancelled", "canceled", "interrupted", "blocked", "charge-unavailable"].includes(entry.status);
 
@@ -102,6 +106,7 @@ function project(entry, sequence, updatedSequence) {
     kind.replaceAll("_", " ");
   const summary = {
     id: entry.id, kind, type: entry.type ?? kind, sequence, updatedSequence,
+    generation: entry.generation ?? 0,
     actor: entry.actor ?? entry.role ?? "harness",
     label: clip(title, 200),
     status: entry.status ?? (entry.error ? "failed" : "complete"),
@@ -112,7 +117,7 @@ function project(entry, sequence, updatedSequence) {
     view: teachingEvent(entry) ? "teaching" : "protocol",
   };
   for (const key of ["parentId", "jobId", "briefingId", "agentRunId", "requestId",
-    "operationId", "toolCallId", "mcpRequestId", "toolName", "tool", "method", "transport",
+    "operationId", "toolCallId", "mcpRequestId", "toolName", "tool", "method", "transport", "reportedBy",
     "model", "turn", "agentTurn", "durationMs", "issueRevision", "beforeRevision",
     "inputRevision", "requestKind", "dispatched", "simulated", "fixture", "mode", "cached"]) {
     const value = entry[key];
@@ -147,6 +152,8 @@ export function createExecutionLog({
 } = {}) {
   const ephemeral = !directory;
   let root, enabled = true, closed = false, sequence = 0, segment = 0, offset = 0;
+  let generation = 0, clearing = null, storageOwned = false;
+  const retiredRoots = [];
   let diskBytes = 0, pendingBytes = 0, logicalBytes = 0, droppedRecords = 0, errors = 0;
   let teachingRecords = 0;
   let reason, writes = Promise.resolve(), budget;
@@ -188,7 +195,9 @@ export function createExecutionLog({
     index.set(value.id, {
       ...pointer, id: value.id, firstSequence: value.firstSequence,
       sequence: value.sequence, recordBytes: value.recordBytes,
-      teaching, taskId: value.summary.taskId,
+      startedAt: previous?.startedAt ?? value.summary.startedAt,
+      sortTime: previous?.sortTime ?? value.sortTime ?? eventTime(value.summary.startedAt, value.firstSequence),
+      teaching, taskId: value.summary.taskId, searchText: encoded(value.summary).toLowerCase(),
     });
     recentProtocol.delete(value.id); recentProtocol.set(value.id, value.summary);
     recentTeaching.delete(value.id);
@@ -206,10 +215,14 @@ export function createExecutionLog({
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
       if (manifest.schemaVersion !== FORMAT || manifest.scopeId !== scopeId)
         throw new Error("Execution archive scope does not match this application");
+      generation = Number.isSafeInteger(manifest.generation) ? manifest.generation : 0;
+      sequence = Number.isSafeInteger(manifest.latestSequence) ? manifest.latestSequence : 0;
+      if (object(manifest.budget)) budget = manifest.budget;
     } else {
       writes = writes.then(() => writeFile(manifestPath,
         encoded({ schemaVersion: FORMAT, scopeId }) + "\n", { mode: 0o600 }));
     }
+    storageOwned = true;
     const segments = readdirSync(root).filter((name) => /^events-\d{6}\.ndjson$/.test(name)).sort();
     for (const name of segments) {
       const data = readFileSync(join(root, name));
@@ -222,6 +235,7 @@ export function createExecutionLog({
           const value = JSON.parse(data.subarray(start, end).toString("utf8"));
           if (!value.id || !Number.isSafeInteger(value.sequence) || !value.summary)
             throw new Error("Invalid archive entry");
+          if ((value.entry?.generation ?? 0) !== generation) { start = end + 1; continue; }
           if (index.size < maximumRecords || index.has(value.id)) {
             install(value, { file: name, offset: start, length: end - start });
             remember(value.id, { value });
@@ -242,7 +256,9 @@ export function createExecutionLog({
     enabled = false;
     incomplete("Execution storage is unavailable; application work can continue");
   }
+  const initializationGeneration = generation;
   writes = writes.catch(() => {
+    if (generation !== initializationGeneration) return;
     enabled = false;
     incomplete("Execution storage initialization failed");
   });
@@ -298,13 +314,15 @@ export function createExecutionLog({
       try { listener(); } catch { incomplete("An execution observer could not update"); }
     }
   }
-  function record(supplied = {}) {
+  function record(supplied = {}, options = {}) {
     try {
-      if (closed) return null;
-      let entry = sanitizeExecution({ id: randomUUID(), startedAt: new Date().toISOString(), ...supplied });
+      if (closed || (options.generation ?? supplied.generation ?? generation) !== generation) return null;
+      const recordGeneration = generation;
+      let entry = sanitizeExecution({ id: randomUUID(), startedAt: new Date().toISOString(), ...supplied, generation });
       const id = String(entry.id);
       entry.id = id;
       const previous = index.get(id);
+      if (previous?.startedAt !== undefined) entry.startedAt = previous.startedAt;
       if (!previous && index.size >= maximumRecords) {
         incomplete("Execution archive record limit reached; newer diagnostics were not captured", true);
         notify();
@@ -329,6 +347,7 @@ export function createExecutionLog({
       const nextSequence = ++sequence;
       const value = {
         id, firstSequence: previous?.firstSequence ?? nextSequence,
+        sortTime: previous?.sortTime ?? eventTime(entry.startedAt, Date.now()),
         sequence: nextSequence, recordBytes, summary: projected, entry: packed,
         ...(recordBudget ? { budget: recordBudget } : {}),
       };
@@ -347,18 +366,22 @@ export function createExecutionLog({
           try {
             for (const [hash, text] of additions) {
               await writeFile(join(root, "objects", `${hash}.json`), text, { mode: 0o600 });
-              blobs.add(hash);
+              if (generation === recordGeneration) blobs.add(hash);
             }
             await appendFile(join(root, file), line, { mode: 0o600 });
-            diskBytes += length + objectBytes;
+            if (generation === recordGeneration) diskBytes += length + objectBytes;
           } catch {
-            enabled = false;
-            incomplete("Execution write failed; application state and spending authority remain separate");
+            if (generation === recordGeneration) {
+              enabled = false;
+              incomplete("Execution write failed; application state and spending authority remain separate");
+            }
           } finally {
-            pendingBytes -= length + objectBytes;
-            for (const hash of additions.keys()) pendingBlobs.delete(hash);
-            const current = cache.get(id);
-            if (current?.value.sequence === nextSequence) current.pending = false;
+            if (generation === recordGeneration) {
+              pendingBytes -= length + objectBytes;
+              for (const hash of additions.keys()) pendingBlobs.delete(hash);
+              const current = cache.get(id);
+              if (current?.value.sequence === nextSequence) current.pending = false;
+            }
           }
         });
       }
@@ -370,15 +393,18 @@ export function createExecutionLog({
       return null;
     }
   }
-  function update(id, patch = {}) {
+  function update(id, patch = {}, options = {}) {
+    if ((options.generation ?? patch.generation ?? generation) !== generation) return null;
     const previous = packedRecord(id);
+    // A late finish for a cleared ID must not recreate its old span.
+    if (!previous && generation > 0) return null;
     if (!previous) return record({ id, ...patch, captureIncomplete: true,
       captureReason: "The beginning of this operation was not captured" });
     return record({ ...hydrate(previous.entry), ...patch, id });
   }
   function summary() {
     return {
-      scopeId, totalRecords: index.size,
+      scopeId, generation, clearSupported: true, sortSupported: true, totalRecords: index.size,
       teachingRecords,
       latestSequence: sequence, logicalBytes, storedBytes: diskBytes,
       requestCount: operations.size,
@@ -388,28 +414,78 @@ export function createExecutionLog({
       capture: { status: reason ? "partial" : "complete", droppedRecords, errors, ...(reason ? { reason } : {}) },
     };
   }
-  function list({ view = "teaching", cursor, limit = 50, query = "", taskId } = {}) {
+  function clear() {
+    if (clearing) return clearing;
+    if (closed || !root || !storageOwned)
+      return Promise.reject(new Error("Execution storage cannot be cleared in this application scope."));
+    const nextGeneration = ++generation;
+    ++sequence;
+    index.clear(); cache.clear(); blobs.clear(); pendingBlobs.clear();
+    recentTeaching.clear(); recentProtocol.clear(); operations.clear();
+    diskBytes = pendingBytes = logicalBytes = droppedRecords = errors = teachingRecords = 0;
+    segment = offset = 0;
+    reason = undefined;
+    enabled = true;
+    // Old writes finish against the old root. New writes queue behind this barrier.
+    const barrier = writes.then(async () => {
+      const checkpoint = `${root}.cleared-${nextGeneration}-${randomUUID()}`;
+      await rename(root, checkpoint);
+      retiredRoots.push(checkpoint);
+      await mkdir(join(root, "objects"), { recursive: true, mode: 0o700 });
+      await writeFile(join(root, "scope.json"), encoded({
+        schemaVersion: FORMAT, scopeId, generation: nextGeneration,
+        latestSequence: sequence, ...(budget ? { budget } : {}),
+      }) + "\n", { mode: 0o600 });
+    });
+    writes = barrier.catch(() => {
+      enabled = false;
+      incomplete("Execution clear could not finish; the previous files and spending ledger remain separate.");
+    });
+    clearing = barrier.then(() => summary()).finally(() => {
+      clearing = null;
+      notify();
+    });
+    notify();
+    return clearing;
+  }
+  function list({ view = "teaching", cursor, limit = 50, query = "", taskId, order = "desc" } = {}) {
+    if (!["asc", "desc"].includes(order)) throw new Error("Choose ascending or descending execution order.");
+    if (!["teaching", "protocol"].includes(view)) throw new Error("Choose teaching or protocol records.");
     const count = Math.max(1, Math.min(100, Math.floor(Number(limit) || 50)));
-    const boundary = cursor == null || cursor === "" ? Infinity : Number(cursor);
     const needle = String(query).slice(0, 256).toLowerCase();
+    const scope = digest(encoded({ scopeId, generation, order, view, query: needle, taskId: taskId ?? null }));
+    let boundary;
+    if (cursor != null && cursor !== "") {
+      try {
+        if (typeof cursor !== "string" || cursor.length > 1024) throw new Error();
+        boundary = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+        if (boundary.scope !== scope || !Number.isFinite(boundary.time) ||
+          !Number.isSafeInteger(boundary.sequence) || boundary.sequence < 1) throw new Error();
+      } catch { throw new Error("This execution cursor does not match the current generation, order or search. Start from the first page."); }
+    }
+    const direction = order === "asc" ? 1 : -1;
     const candidates = [...index.values()].filter((entry) =>
-      (view === "protocol" || entry.teaching) && (!taskId || entry.taskId === taskId),
-    ).sort((a, b) => b.firstSequence - a.firstSequence);
+      (view === "protocol" || entry.teaching) && (!taskId || entry.taskId === taskId) &&
+      (!needle || entry.searchText.includes(needle)),
+    ).sort((a, b) => direction * (a.sortTime - b.sortTime || a.firstSequence - b.firstSequence));
     const records = [];
     let nextCursor = null, more = false;
     for (const candidate of candidates) {
-      if (!(candidate.firstSequence < boundary)) continue;
+      if (boundary && direction * (candidate.sortTime - boundary.time ||
+        candidate.firstSequence - boundary.sequence) <= 0) continue;
       const value = packedRecord(candidate.id);
       if (!value) continue;
-      if (needle && !encoded(value.summary).toLowerCase().includes(needle)) continue;
       if (records.length === count) { more = true; break; }
       records.push(value.summary);
-      nextCursor = candidate.firstSequence;
+      nextCursor = Buffer.from(encoded({
+        scope, time: candidate.sortTime, sequence: candidate.firstSequence,
+      })).toString("base64url");
     }
-    return { records, nextCursor: more ? String(nextCursor) : null, total: candidates.length, summary: summary() };
+    return { records, nextCursor: more ? nextCursor : null, total: candidates.length, summary: summary() };
   }
   const api = {
-    record, update, list, summary,
+    record, update, list, summary, clear,
+    get generation() { return generation; },
     recent({ limit = 50, view = "teaching" } = {}) {
       const count = Math.max(1, Math.min(100, Math.floor(Number(limit) || 50)));
       return [...(view === "protocol" ? recentProtocol : recentTeaching).values()].slice(-count);
@@ -417,6 +493,10 @@ export function createExecutionLog({
     async get(id) {
       const value = packedRecord(String(id));
       return value ? hydrate(value.entry) : null;
+    },
+    describe(id) {
+      const value = packedRecord(String(id));
+      return value ? structuredClone(value.summary) : null;
     },
     // Explicit legacy/testing access. Normal state delivery uses recent().
     readAll() {
@@ -431,7 +511,11 @@ export function createExecutionLog({
       return summary();
     },
     async restore(entries) {
+      const restoreGeneration = generation;
+      // Cleared archives must not re-import a retained legacy history at restart.
+      if (restoreGeneration > 0) return summary();
       for (let offset = 0; offset < entries.length; offset += 50) {
+        if (generation !== restoreGeneration) break;
         for (const entry of entries.slice(offset, offset + 50))
           if (entry?.id && !index.has(entry.id)) record(entry);
         await api.flush();
@@ -442,10 +526,11 @@ export function createExecutionLog({
       closed = true;
       await writes;
       listeners.clear();
-      if (ephemeral && root) await rm(root, { recursive: true, force: true });
+      if (ephemeral && root)
+        for (const path of [root, ...retiredRoots]) await rm(path, { recursive: true, force: true });
     },
   };
-  for (const previous of initialEntries) {
+  for (const previous of generation === 0 ? initialEntries : []) {
     if (!previous?.id || index.has(previous.id)) continue;
     record(previous);
   }

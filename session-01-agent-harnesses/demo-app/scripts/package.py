@@ -66,6 +66,9 @@ def inventory() -> tuple[list[Path], list[str]]:
 
     def include(path: Path) -> None:
         relative = path.relative_to(ROOT).as_posix()
+        if relative in {"ui/browser.mjs", "ui/browser.mjs.next"}:
+            omitted.append(relative)
+            return
         if excluded(path):
             omitted.append(relative)
             return

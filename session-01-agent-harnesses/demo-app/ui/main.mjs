@@ -6,9 +6,18 @@ import {
   ACTION_FIELDS,
   editableActionFields,
 } from "../support/action-fields.mjs";
+import { detectLanguage, highlightCode } from "./code-format.mjs";
+import { isIncidentalField } from "./incidental-fields.mjs";
+import { activityDuration, activityLabel, activityStatus, inspectionActivities } from "./execution-display.mjs";
 
 const element = (id) => document.getElementById(id);
-const markdown = window.markdownit({ html: false, linkify: false });
+const markdown = window.markdownit({
+  html: false, linkify: false,
+  highlight: (text, language) => {
+    const result = highlightCode(text, language);
+    return `<pre class="code-surface"><code class="hljs">${result.html}</code></pre>`;
+  },
+});
 markdown.renderer.rules.image = (tokens, index, options, env, renderer) =>
   markdown.utils.escapeHtml(
     renderer.renderInlineAsText(tokens[index].children, options, env),
@@ -26,7 +35,16 @@ let inspectionGeneration = 0,
   detailController,
   inspectionCursor = null,
   inspectionTitle = "Execution details",
-  inspectionSequence = null;
+  inspectionSequence = null,
+  inspectionArchiveGeneration = null,
+  clearingExecution = false,
+  inspectionPageCursor = null,
+  inspectionBusy = false,
+  inspectionFailed = false,
+  inspectionRefreshTimer,
+  inspectionSearchTimer,
+  inspectionLastRead = 0;
+const inspectionRows = new Map();
 let lastApprovalId = null,
   draftSession = null,
   lastUserPreferencesStatus = null;
@@ -71,6 +89,133 @@ const node = (tag, className, value) => {
   if (value !== undefined) result.textContent = value;
   return result;
 };
+const renderedJson = new WeakMap();
+/** JSON values stay exact; branches create their children only when expanded. */
+function jsonTreeNode(value, key = null) {
+  const label = () => key === null
+    ? document.createTextNode("")
+    : node("span", "json-key", `${JSON.stringify(key)}: `);
+  if (value === null || typeof value !== "object") {
+    const row = node("div", "json-tree-leaf");
+    const type = value === null ? "null" : typeof value;
+    const content = node("span", `json-${type}`, JSON.stringify(value) ?? String(value));
+    if (isIncidentalField(key, value)) {
+      const reveal = node("span", "incidental-value");
+      reveal.dataset.concealed = "true";
+      reveal.tabIndex = 0;
+      reveal.setAttribute("role", "button");
+      reveal.setAttribute("aria-label", `Reveal ${key}`);
+      content.setAttribute("aria-hidden", "true");
+      reveal.append(content);
+      const show = (event) => {
+        event.stopPropagation();
+        reveal.dataset.concealed = "false";
+        reveal.removeAttribute("role");
+        reveal.removeAttribute("tabindex");
+        reveal.removeAttribute("aria-label");
+        content.removeAttribute("aria-hidden");
+      };
+      reveal.onclick = show;
+      reveal.onkeydown = (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); show(event); }
+      };
+      row.append(label(), reveal);
+    } else row.append(label(), content);
+    return { element: row };
+  }
+  const array = Array.isArray(value);
+  const keys = Object.keys(value);
+  if (!keys.length) {
+    const row = node("div", "json-tree-leaf");
+    row.append(label(), node("span", "json-collection", array ? "[]" : "{}"));
+    return { element: row };
+  }
+  const branch = node("details", "json-tree-branch");
+  const summary = node("summary");
+  summary.append(label(), node("span", "json-collection",
+    array ? `Array [${keys.length}]` : `Object {${keys.length}}`));
+  const body = node("div", "json-tree-children");
+  branch.append(summary, body);
+  let children;
+  const populate = () => {
+    if (children) return;
+    children = keys.map((name) => jsonTreeNode(value[name], array ? Number(name) : name));
+    body.append(...children.map((child) => child.element));
+  };
+  branch.addEventListener("toggle", () => {
+    if (branch.open) populate();
+  });
+  return {
+    element: branch,
+    expand() {
+      populate();
+      branch.open = true;
+      for (const child of children) child.expand?.();
+    },
+    collapse() {
+      branch.open = false;
+      for (const child of children ?? []) child.collapse?.();
+    },
+  };
+}
+function jsonPanel(value) {
+  const panel = node("section", "json-inspection");
+  panel.setAttribute("aria-label", "JSON inspection");
+  const controls = node("div", "json-tree-controls");
+  const tree = node("div", "json-tree");
+  tree.tabIndex = 0;
+  tree.setAttribute("aria-label", "Complete JSON tree");
+  const root = jsonTreeNode(value);
+  tree.append(root.element);
+  if (root.expand) {
+    const expand = node("button", "text-button", "Expand tree");
+    const collapse = node("button", "text-button", "Collapse tree");
+    expand.type = collapse.type = "button";
+    expand.onclick = () => root.expand();
+    collapse.onclick = () => root.collapse();
+    controls.append(expand, collapse);
+  }
+  const copy = node("button", "text-button", "Copy JSON");
+  copy.type = "button";
+  const status = node("span", "hint");
+  status.setAttribute("role", "status");
+  copy.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(value, null, 2) ?? "");
+      status.textContent = "Copied";
+    } catch {
+      status.textContent = "Clipboard unavailable.";
+    }
+  };
+  controls.append(copy, status);
+  panel.append(controls, tree);
+  return panel;
+}
+function renderJsonInto(id, value) {
+  const target = element(id);
+  const signature = JSON.stringify(value);
+  if (renderedJson.get(target) === signature) return;
+  renderedJson.set(target, signature);
+  target.replaceChildren(jsonPanel(value));
+}
+function sourceLines(content, language) {
+  const template = document.createElement("template");
+  template.innerHTML = highlightCode(content, language).html;
+  const lines = [document.createDocumentFragment()];
+  function walk(item, scopes = []) {
+    if (item.nodeType === Node.TEXT_NODE) {
+      const pieces = item.textContent.split("\n");
+      pieces.forEach((piece, index) => {
+        if (index) lines.push(document.createDocumentFragment());
+        if (piece) lines.at(-1).append(scopes.length
+          ? node("span", scopes.join(" "), piece) : document.createTextNode(piece));
+      });
+    } else for (const child of item.childNodes)
+      walk(child, item.nodeType === Node.ELEMENT_NODE ? [...scopes, ...item.classList] : scopes);
+  }
+  walk(template.content);
+  return lines;
+}
 function showError(value) {
   element("error").hidden = !value;
   text("error", value || "");
@@ -657,12 +802,7 @@ function renderUserPreferences() {
     );
   }
   element("pending-save").hidden = !userPreferences.pending;
-  text(
-    "pending-save-data",
-    userPreferences.pending
-      ? JSON.stringify(userPreferences.pending, null, 2)
-      : "",
-  );
+  renderJsonInto("pending-save-data", userPreferences.pending ?? null);
   const visible = Boolean(
     userPreferences.pending ||
     userPreferences.error ||
@@ -709,19 +849,10 @@ function renderApproval() {
       }),
     );
   }
-  text(
-    "approval-data",
-    JSON.stringify(
-      {
-        tool: approval.tool,
-        arguments: approval.args,
-        userPreferencesRevision: approval.etag,
-        expiresAt: approval.expiresAt,
-      },
-      null,
-      2,
-    ),
-  );
+  renderJsonInto("approval-data", {
+    tool: approval.tool, arguments: approval.args,
+    userPreferencesRevision: approval.etag, expiresAt: approval.expiresAt,
+  });
   const expired = Date.parse(approval.expiresAt) <= Date.now();
   text(
     "approval-expiry",
@@ -952,6 +1083,12 @@ function groupTrace() {
   return groups;
 }
 function renderTrace() {
+  const canClear = applicationState.execution?.clearSupported === true;
+  element("execution-clear").hidden = !canClear;
+  element("execution-clear").disabled = !canClear || clearingExecution;
+  const canSort = applicationState.execution?.sortSupported === true;
+  element("execution-order-field").hidden = !canSort;
+  element("execution-order").disabled = !canSort;
   const groups = groupTrace();
   const visible = new Set();
   const count = applicationState.execution?.requests?.length ?? 0;
@@ -986,28 +1123,34 @@ function renderTrace() {
     item.section.classList.toggle("active", isActive);
     item.title.textContent = group.title;
     item.meta.textContent = group.start
-      ? `Model${group.start.requestKind ? ` · ${group.start.requestKind}` : ""} · ${new Date(group.start.startedAt ?? group.start.at).toLocaleTimeString()}`
+      ? [`Model${group.start.requestKind ? ` · ${group.start.requestKind}` : ""}`,
+          new Date(group.start.startedAt ?? group.start.at).toLocaleTimeString(),
+          activityDuration(group.start)].filter(Boolean).join(" · ")
       : "Observed operations";
     const toolSignature = JSON.stringify(group.entries);
     if (item.tools.dataset.signature !== toolSignature) {
       item.tools.dataset.signature = toolSignature;
-      item.tools.replaceChildren(
-        ...group.entries.map((entry) => {
-          const row = node("li");
-          const button = node(
-            "button",
-            "trace-operation",
-            `${executionRole(entry)} · ${entry.label} · ${entry.status}`,
-          );
+      const old = new Map([...item.tools.children].map((row) => [row.dataset.record, row]));
+      const kept = new Set();
+      for (const entry of group.entries) {
+        let row = old.get(String(entry.id));
+        if (!row) {
+          row = node("li");
+          row.dataset.record = entry.id;
+          const button = node("button", "trace-operation");
           button.type = "button";
-          button.onclick = () =>
-            inspectExecution(entry.id, entry.label, button);
+          button.onclick = () => inspectExecution(entry.id, activityLabel(entry), button);
           row.append(button);
-          return row;
-        }),
-      );
+          item.tools.append(row);
+        }
+        row.firstElementChild.textContent = [
+          executionRole(entry), activityLabel(entry), activityStatus(entry.status), activityDuration(entry),
+        ].filter(Boolean).join(" · ");
+        kept.add(String(entry.id));
+      }
+      for (const [id, row] of old) if (!kept.has(id)) row.remove();
     }
-    const status = isActive ? "In progress" : group.start?.status ?? "";
+    const status = isActive ? "In progress" : activityStatus(group.start?.status);
     if (item.outcome.textContent !== status) item.outcome.textContent = status;
   }
   for (const [id, item] of requests)
@@ -1018,7 +1161,7 @@ function renderTrace() {
   text(
     "execution-summary",
     count
-      ? `${count} model ${count === 1 ? "request" : "requests"} · ${applicationState.activeId ? "Activity running" : applicationState.lastOutcome?.status || "Recorded activity"}`
+      ? `${count} model ${count === 1 ? "request" : "requests"} · ${applicationState.activeId ? "Activity running" : activityStatus(applicationState.lastOutcome?.status) || "Recorded activity"}`
       : "Requests and source operations appear here.",
   );
   text(
@@ -1032,14 +1175,7 @@ function renderTrace() {
       ? `Some diagnostic details could not be captured. ${capture.reason ?? ""} Application work can continue.`
       : "",
   );
-  if (element("request-dialog").open)
-    text(
-      "execution-freshness",
-      inspectionSequence !== null &&
-        applicationState.execution?.latestSequence > inspectionSequence
-        ? "New execution records are available. Refresh this list to see them."
-        : "",
-    );
+  scheduleInspectionRefresh();
 }
 /** The model chooses; tools execute; the harness coordinates and checks. */
 function executionRole(entry) {
@@ -1052,33 +1188,130 @@ function executionRole(entry) {
 }
 
 function inspectExecution(filter, title, opener) {
+  clearTimeout(inspectionSearchTimer);
+  inspectionSearchTimer = null;
   selectedRequestFilter = filter;
   inspectionTitle = title;
   element("execution-query").value = "";
   element("execution-query").disabled = filter !== "all";
+  element("execution-query-field").hidden = filter !== "all";
+  element("execution-scope").hidden = filter === "all";
+  text("execution-scope-label", title);
   openDialog("request-dialog", opener);
   void loadInspection();
 }
 
-/** Replace one compact page; reading a list does not fetch any full record. */
-async function loadInspection(cursor) {
+async function clearExecutionLogs() {
+  if (applicationState.execution?.clearSupported !== true || clearingExecution || !window.confirm(
+    "Clear all execution logs for this visit? Archived details will be removed. " +
+    "Your conversation, preferences, funding and current task are kept. New activity can create new logs.",
+  )) return;
+  clearingExecution = true;
+  clearTimeout(inspectionRefreshTimer);
+  clearTimeout(inspectionSearchTimer);
+  inspectionRefreshTimer = inspectionSearchTimer = null;
+  element("execution-more").open = false;
+  element("execution-clear").disabled = true;
+  inspectionGeneration++;
   inspectionController?.abort();
   detailController?.abort();
+  text("execution-load-status", "Clearing execution logs…");
+  try {
+    const response = await fetch("/api/execution/clear", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      redirect: "error",
+      body: "{}",
+      signal: AbortSignal.timeout(15000),
+    });
+    const { revision, ...summary } = await response.json();
+    if (!response.ok) throw Error(summary.error || "Execution logs could not be cleared.");
+    inspectionGeneration++;
+    inspectionController?.abort();
+    detailController?.abort();
+    // Do not advance the SSE revision: unseen conversation events still apply.
+    if (revision >= applicationState.revision) {
+      applicationState.trace = [];
+      applicationState.execution = summary;
+      renderTrace();
+    }
+    selectedRequestFilter = "all";
+    inspectionTitle = "Execution details";
+    inspectionCursor = null;
+    inspectionSequence = null;
+    element("execution-query").value = "";
+    element("execution-query").disabled = false;
+    element("execution-query-field").hidden = false;
+    element("execution-scope").hidden = true;
+    element("execution-pagination").hidden = true;
+    inspectionRows.clear();
+    element("request-data").replaceChildren();
+    await refresh();
+    if (element("request-dialog").open) await loadInspection();
+  } catch (error) {
+    inspectionFailed = true;
+    text("execution-load-status", `${error.message} Retry reading the list to check its contents.`);
+    element("execution-retry").hidden = false;
+  } finally {
+    clearingExecution = false;
+    element("execution-clear").disabled = applicationState.execution?.clearSupported !== true;
+  }
+}
+
+function scheduleInspectionRefresh() {
+  const sequence = applicationState.execution?.latestSequence;
+  const archiveChanged = inspectionArchiveGeneration !== null &&
+    applicationState.execution?.generation != null &&
+    applicationState.execution.generation !== inspectionArchiveGeneration;
+  if (!element("request-dialog").open || clearingExecution || inspectionBusy ||
+      (inspectionFailed && !archiveChanged) || inspectionSearchTimer || inspectionRefreshTimer ||
+      (!archiveChanged && (inspectionSequence === null || sequence == null || sequence === inspectionSequence))) return;
+  inspectionRefreshTimer = setTimeout(() => {
+    inspectionRefreshTimer = null;
+    const reset = inspectionArchiveGeneration !== null &&
+      applicationState.execution?.generation != null &&
+      applicationState.execution.generation !== inspectionArchiveGeneration;
+    if (!element("request-dialog").open || clearingExecution || inspectionBusy ||
+        (inspectionFailed && !reset)) return;
+    void loadInspection(reset ? undefined : inspectionPageCursor, { background: !reset });
+  }, Math.max(0, 1000 - (Date.now() - inspectionLastRead)));
+}
+
+/** Refresh summaries in place. Only an explicit open reads a full record. */
+async function loadInspection(cursor, { background = false } = {}) {
+  clearTimeout(inspectionRefreshTimer);
+  inspectionRefreshTimer = null;
+  inspectionController?.abort();
+  if (!background) {
+    detailController?.abort();
+    inspectionRows.clear();
+    element("request-data").replaceChildren();
+    element("execution-pagination").hidden = !cursor;
+    element("execution-next").hidden = true;
+    element("execution-first").hidden = !cursor;
+  }
   inspectionController = new AbortController();
   const generation = ++inspectionGeneration;
+  inspectionBusy = true;
+  inspectionFailed = false;
+  inspectionLastRead = Date.now();
+  inspectionPageCursor = cursor ?? null;
   inspectionCursor = null;
   element("execution-next").disabled = true;
-  element("request-data").replaceChildren();
-  text("request-title", inspectionTitle);
-  text("execution-load-status", "Loading execution records…");
-  text("execution-freshness", "");
+  element("execution-retry").hidden = true;
+  text("request-title", "Execution");
+  if (!background) text("execution-load-status", "Loading activities…");
   const query =
     selectedRequestFilter === "all"
       ? element("execution-query").value.trim()
       : selectedRequestFilter;
+  const view = element("execution-view").value;
   const params = new URLSearchParams({
-    view: element("execution-view").value,
+    view,
     limit: "40",
+    ...(applicationState.execution?.sortSupported === true
+      ? { order: element("execution-order").value } : {}),
     ...(query ? { query } : {}),
     ...(cursor ? { cursor } : {}),
   });
@@ -1090,63 +1323,128 @@ async function loadInspection(cursor) {
         AbortSignal.timeout(15000),
       ]),
     });
-    if (!response.ok) throw Error("Execution records are unavailable. Try Refresh.");
+    if (!response.ok) throw Error("Execution records are unavailable.");
     const page = await response.json();
     if (generation !== inspectionGeneration || !element("request-dialog").open)
       return;
     inspectionCursor = page.nextCursor;
     inspectionSequence =
       page.summary?.latestSequence ?? applicationState.execution?.latestSequence ?? 0;
-    renderInspection(page.records);
-    element("execution-next").disabled = !page.nextCursor;
-    text(
-      "execution-load-status",
-      page.records.length
-        ? `${page.records.length} records on this page. Open a record to load its full detail.`
-        : "No matching records.",
-    );
+    inspectionArchiveGeneration =
+      page.summary?.generation ?? applicationState.execution?.generation ?? null;
+    const displayed = renderInspection(page.records, { preserve: background, view });
+    element("execution-next").disabled = false;
+    element("execution-next").hidden = !page.nextCursor;
+    element("execution-first").hidden = !inspectionPageCursor;
+    element("execution-pagination").hidden = !inspectionPageCursor && !page.nextCursor;
+    const singlePage = !inspectionPageCursor && !page.nextCursor &&
+      (page.total == null || page.total === page.records.length);
+    const noun = view === "teaching" ? (displayed.activities === 1 ? "activity" : "activities")
+      : (displayed.activities === 1 ? "record" : "records");
+    const activityCount = `${displayed.activities} ${noun}`;
+    const counts = singlePage
+      ? activityCount + (displayed.activities === page.records.length ? "" : ` · ${page.records.length} matching records`)
+      : `${activityCount} shown · ${page.records.length} records on this page${page.total == null ? "" : ` · ${page.total} records in scope`}`;
+    text("execution-load-status", page.records.length
+      ? counts + (displayed.retained ? ` · ${displayed.retained} open or focused row retained` : "")
+      : displayed.retained ? "No matching records on this page. The open or focused row is retained." : "No matching activity.");
   } catch (error) {
-    if (generation === inspectionGeneration && error.name !== "AbortError")
+    if (generation === inspectionGeneration && error.name !== "AbortError") {
+      inspectionFailed = true;
       text("execution-load-status", error.message);
+      element("execution-retry").hidden = false;
+    }
+  } finally {
+    if (generation === inspectionGeneration) {
+      inspectionBusy = false;
+      scheduleInspectionRefresh();
+    }
   }
 }
 
-function renderInspection(entries) {
-  for (const entry of entries) {
-    const details = node("details", "trace-entry");
-    details.dataset.event = entry.id;
-    const label = `${new Date(entry.startedAt ?? entry.at).toLocaleTimeString()} · ${entry.label} · ${entry.status}`;
-    const badge = node(
-      "span",
-      "trace-badge",
-      executionRole(entry),
-    );
-    badge.dataset.role = entry.actor;
-    const summary = node("summary");
-    summary.append(badge, document.createTextNode(label));
-    const body = node("div");
-    details.append(summary, body);
-    details.addEventListener("toggle", () => {
-      if (!details.open) {
-        body.replaceChildren();
-        return;
-      }
-      // Only the selected full record stays in the DOM. No full-record cache.
-      for (const other of element("request-data").querySelectorAll("details[open]"))
-        if (other !== details) {
-          other.open = false;
-          other.lastElementChild.replaceChildren();
+function renderInspection(entries, { preserve = false, view = "teaching" } = {}) {
+  const activities = inspectionActivities(entries, view);
+  const container = element("request-data");
+  const focused = document.activeElement;
+  const anchor = [...inspectionRows.values()].find((item) => item.details.contains(focused))?.details ??
+    [...inspectionRows.values()].find((item) => item.details.open)?.details;
+  const anchorTop = anchor?.getBoundingClientRect().top;
+  const keys = new Set(activities.map((activity) => activity.key));
+  let retained = 0;
+  for (const [key, item] of inspectionRows) {
+    if (keys.has(key)) continue;
+    if (preserve && (item.details.open || item.details.contains(focused))) {
+      retained++;
+      item.meta.textContent = `${item.metadata} · Retained while open or focused`;
+    } else {
+      item.controller?.abort();
+      item.details.remove();
+      inspectionRows.delete(key);
+    }
+  }
+  let position = container.firstElementChild;
+  for (const activity of activities) {
+    const entry = activity.record;
+    let item = inspectionRows.get(activity.key);
+    if (!item) {
+      const details = node("details", "trace-entry");
+      const badge = node("span", "trace-badge");
+      const label = node("span");
+      const meta = node("span", "trace-entry-meta");
+      const summary = node("summary");
+      summary.append(badge, label, meta);
+      const body = node("div");
+      const actions = node("div", "trace-entry-actions");
+      const outcome = node("button", "text-button", "Load outcome record");
+      outcome.type = "button";
+      actions.append(outcome);
+      details.append(summary, actions, body);
+      item = { details, badge, label, meta, body, outcome, activity };
+      const current = item;
+      outcome.onclick = () => void loadExecutionRecord(
+        current.activity.outcomeId ?? current.fullOutcomeId, details, body, current,
+      );
+      details.addEventListener("toggle", (event) => {
+        if (event.target !== details) return;
+        if (!details.open) {
+          current.controller?.abort();
+          body.replaceChildren();
+          return;
         }
-      void loadExecutionRecord(entry.id, details, body);
-    });
-    element("request-data").append(details);
+        for (const other of inspectionRows.values())
+          if (other !== current && other.details.open) other.details.open = false;
+        void loadExecutionRecord(current.activity.record.id, details, body, current);
+      });
+      inspectionRows.set(activity.key, item);
+    }
+    item.activity = activity;
+    item.details.dataset.event = entry.id;
+    item.badge.textContent = executionRole(entry);
+    item.badge.dataset.role = entry.actor;
+    item.label.textContent = activityLabel(entry);
+    const at = new Date(entry.startedAt ?? entry.at);
+    item.metadata = [
+      activityStatus(entry.status), activityDuration(entry),
+      Number.isFinite(at.getTime()) ? at.toLocaleTimeString() : "",
+      view === "protocol" ? entry.type ?? entry.kind : "",
+    ].filter(Boolean).join(" · ");
+    item.meta.textContent = item.metadata;
+    item.outcome.hidden = !(activity.outcomeId ?? item.fullOutcomeId);
+    if (item.details !== position) container.insertBefore(item.details, position);
+    position = item.details.nextElementSibling;
   }
+  if (preserve && focused?.isConnected && document.activeElement !== focused)
+    focused.focus({ preventScroll: true });
+  if (preserve && anchor?.isConnected)
+    element("request-dialog").scrollTop += anchor.getBoundingClientRect().top - anchorTop;
+  return { activities: activities.length, retained };
 }
 
-async function loadExecutionRecord(id, details, body) {
+async function loadExecutionRecord(id, details, body, item) {
   detailController?.abort();
   const controller = new AbortController();
   detailController = controller;
+  item.controller = controller;
   body.replaceChildren(node("p", "hint", "Loading full record…"));
   try {
     const response = await fetch(`/api/execution/${encodeURIComponent(id)}`, {
@@ -1157,20 +1455,15 @@ async function loadExecutionRecord(id, details, body) {
     if (!response.ok || !record)
       throw Error("This record is unavailable. Refresh the list and try again.");
     if (controller.signal.aborted || !details.open || !body.isConnected) return;
-    body.replaceChildren(node("pre", "", JSON.stringify(record, null, 2)));
-    if (record.endRecordId) {
-      const endId = record.endRecordId;
-      const outcome = node("button", "quiet", "Load outcome record");
-      outcome.type = "button";
-      outcome.onclick = () => void loadExecutionRecord(endId, details, body);
-      body.prepend(outcome);
-    }
+    body.replaceChildren(jsonPanel(record));
+    item.fullOutcomeId = record.endRecordId;
+    item.outcome.hidden = !(item.activity.outcomeId ?? item.fullOutcomeId);
   } catch (error) {
     if (controller.signal.aborted || !details.open || !body.isConnected) return;
     body.replaceChildren(node("p", "hint", error.message));
     const retry = node("button", "quiet", "Retry read");
     retry.type = "button";
-    retry.onclick = () => void loadExecutionRecord(id, details, body);
+    retry.onclick = () => void loadExecutionRecord(id, details, body, item);
     body.append(retry);
   }
 }
@@ -1229,12 +1522,14 @@ async function showSource(which) {
   const content = await response.text();
   if (generation !== sourceReadGeneration) return;
   text("source-path", `${target.path} · line ${target.line}`);
-  const lines = content.split("\n").map((line, index) => {
+  const lines = sourceLines(content, detectLanguage(target.path)).map((line, index) => {
     const row = node("div", "code-line");
     if (index + 1 === target.line) row.classList.add("selected");
+    const source = node("span", "line-content hljs");
+    source.append(line);
     row.append(
       node("span", "line-number", String(index + 1)),
-      node("span", "line-content", line || " "),
+      source,
     );
     return row;
   });
@@ -1361,19 +1656,42 @@ element("open-execution").onclick = () =>
 element("activity-details").onclick = () => {
   inspectExecution("all", "Execution details", element("activity-details"));
 };
-element("execution-refresh").onclick = () => void loadInspection();
+element("execution-retry").onclick = reloadInspection;
+element("execution-first").onclick = () => void loadInspection();
 element("execution-next").onclick = () => void loadInspection(inspectionCursor);
-element("execution-view").onchange = () => void loadInspection();
+element("execution-clear").onclick = () => void clearExecutionLogs();
+function reloadInspection() {
+  clearTimeout(inspectionSearchTimer);
+  inspectionSearchTimer = null;
+  void loadInspection();
+}
+element("execution-view").onchange = reloadInspection;
+element("execution-order").onchange = reloadInspection;
+element("execution-query").oninput = () => {
+  clearTimeout(inspectionSearchTimer);
+  inspectionSearchTimer = setTimeout(() => {
+    inspectionSearchTimer = null;
+    void loadInspection();
+  }, 300);
+};
 element("execution-search").onsubmit = (event) => {
   event.preventDefault();
-  void loadInspection();
+  reloadInspection();
 };
 element("execution-all").onclick = () =>
   inspectExecution("all", "Execution details", element("execution-all"));
 element("request-dialog").addEventListener("close", () => {
+  clearTimeout(inspectionRefreshTimer);
+  clearTimeout(inspectionSearchTimer);
+  inspectionRefreshTimer = inspectionSearchTimer = null;
   inspectionGeneration++;
   inspectionController?.abort();
   detailController?.abort();
+  inspectionBusy = false;
+  inspectionFailed = false;
+  inspectionSequence = null;
+  inspectionArchiveGeneration = null;
+  inspectionRows.clear();
   element("request-data").replaceChildren();
 });
 for (const name of ["explore", "execution", "request"]) {
@@ -1433,6 +1751,10 @@ for (const kind of ["patch", "message", "message_update", "text", "execution"])
 for (const kind of ["resync", "error"])
   events.addEventListener(kind, () => void refresh());
 window.addEventListener("pagehide", () => {
+  clearTimeout(inspectionRefreshTimer);
+  clearTimeout(inspectionSearchTimer);
+  inspectionController?.abort();
+  detailController?.abort();
   saveDraft();
   events.close();
 });

@@ -11,3 +11,6 @@ tmp/
 __pycache__/
 *.pyc
 .ruff_cache/
+# Rebuilt from ui/main.mjs; the served URL stays stable for an active visit.
+/ui/browser.mjs
+/ui/browser.mjs.next

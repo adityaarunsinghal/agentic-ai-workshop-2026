@@ -5,6 +5,9 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
+execFileSync(process.execPath, [path.join(root, "scripts/build-browser.mjs")], {
+  stdio: "inherit",
+});
 for (const directory of ["agent", "support", "ui", "scripts", "local"]) {
   const folder = path.join(root, directory);
   for (const name of fs
@@ -32,6 +35,7 @@ if (
   throw new Error("The source declaration must remain HN-only.");
 for (const name of [
   "ui/index.html",
+  "ui/favicon.svg",
   "ui/browser.mjs",
   "ui/style.css",
   "ui/fonts/montserrat.woff2",

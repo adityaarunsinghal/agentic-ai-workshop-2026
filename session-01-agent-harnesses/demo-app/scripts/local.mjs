@@ -14,6 +14,7 @@ try {
   const runtime = await serveApp(application, {
     port: Number(process.env.PORT || 0),
     host: "127.0.0.1",
+    hotReload: ["live", "development"].includes(mode) && process.env.LOCAL_UI_HOT_RELOAD === "1",
   });
   await application.initialize();
   console.info(

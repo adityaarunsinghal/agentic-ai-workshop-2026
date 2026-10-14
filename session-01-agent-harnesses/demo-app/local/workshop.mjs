@@ -72,7 +72,8 @@ export function createLocalWorkshop({
     },
     usage: null,
   };
-  const redactText = (text) => key ? text.replaceAll(key, "[redacted]") : text;
+  const redactText = (text) =>
+    key ? text.replaceAll(key, "[redacted]") : text;
   const cleanError = (error) =>
     redactText(String(error?.message || error || "Local request failed."));
   function assertLive(signal) {

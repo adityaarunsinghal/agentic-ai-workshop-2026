@@ -121,7 +121,7 @@ and the application's state determine whether startup succeeded.
    [agent/app.mjs](agent/app.mjs).
 2. Change one instruction or add a small read-only tool.
 3. Restart the preview after changing server code. Refresh after changing
-   [the interface](ui/index.html), [browser code](ui/browser.mjs) or
+   [the interface](ui/index.html), [browser code](ui/main.mjs) or
    [styles](ui/style.css).
 4. Inspect an outgoing request to check the instructions and tool declaration.
    Use real mode to evaluate how a model responds to your change.
@@ -209,6 +209,16 @@ If you rename a mapped function, update its anchor in
 [scripts/sources.mjs](scripts/sources.mjs). If you add public source outside the
 existing directories, declare it in [package-files.json](package-files.json).
 The source map is regenerated from current files during the build.
+
+JSON records, approvals, saved-state details, Markdown code blocks and source
+files use syntax colors. Encoded JSON and fenced code inside record strings
+have optional readable views. Formatting changes only the display; original
+records and model/tool inputs remain unchanged.
+
+The browser source is `ui/main.mjs`. Build bundles its display libraries into
+the ignored `ui/browser.mjs` asset at the existing browser URL. Rebuilding and
+refreshing that UI keeps an active server conversation intact. Source ZIPs
+include the authored files and rebuild the browser asset during installation.
 
 ### Create a fresh upload ZIP
 

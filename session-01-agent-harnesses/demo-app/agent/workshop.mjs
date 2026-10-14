@@ -241,8 +241,11 @@ export function createWorkshop({
     }
   }
 
+  /** Redact diagnostic text without supplying an error message for empty text. */
   function redactText(text) {
-    return workshopToken ? text.replaceAll(workshopToken, "[redacted]") : text;
+    return workshopToken
+      ? text.replaceAll(workshopToken, "[redacted]")
+      : text;
   }
 
   function cleanError(error) {

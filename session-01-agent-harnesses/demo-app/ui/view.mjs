@@ -11,6 +11,7 @@ import { RESOURCE_LIMITS_FOR_HARNESS_TESTING } from "../support/limits.mjs";
 import { publicActionField } from "../support/action-fields.mjs";
 import { safeErrorMetadata } from "../support/recovery.mjs";
 import { createExecutionLog } from "../support/execution-log.mjs";
+import { createUiReload } from "../support/ui-reload.mjs";
 
 const recentExecutionLimit = 50;
 
@@ -168,7 +169,8 @@ export function createView(
   const pendingSpans = new Map();
   let capturing = false,
     executionSignature = "",
-    closing;
+    closing,
+    clearingExecution;
   let pendingText = null,
     timer = null;
 
@@ -197,6 +199,7 @@ export function createView(
   }
 
   function syncExecution() {
+    if (clearingExecution) return;
     state.trace = execution.recent({ limit: recentExecutionLimit });
     state.execution = {
       ...execution.summary(),
@@ -212,6 +215,28 @@ export function createView(
   const stopObservingExecution = execution.subscribe(() => {
     if (!capturing) syncExecution();
   });
+
+  function clearExecution() {
+    if (clearingExecution) return clearingExecution;
+    // Task events can continue, but the reset owns diagnostics until it finishes.
+    clearingExecution = Promise.resolve().then(async () => {
+      try {
+        await execution.clear();
+        requestRecords.clear();
+        requestSummaries.clear();
+        toolRecords.clear();
+        pendingSpans.clear();
+      } catch (error) {
+        clearingExecution = null;
+        syncExecution();
+        throw error;
+      }
+      clearingExecution = null;
+      syncExecution();
+      return { ...state.execution, revision: state.revision };
+    });
+    return clearingExecution;
+  }
 
   function flush() {
     clearTimeout(timer);
@@ -278,6 +303,7 @@ export function createView(
   }
 
   function trace(entry) {
+    if (clearingExecution) return null;
     flush();
     capturing = true;
     try {
@@ -481,6 +507,7 @@ export function createView(
     text,
     trace,
     execution,
+    clearExecution,
     acceptAgentEvent,
     flush,
     connect,
@@ -495,12 +522,16 @@ export function createView(
  */
 export async function serveApp(
   application,
-  { port = 8080, host = "0.0.0.0" } = {},
+  { port = 8080, host = "0.0.0.0", hotReload = false } = {},
 ) {
   const rootUrl = new URL("../", import.meta.url);
   const root = fileURLToPath(rootUrl);
+  const uiReload = hotReload ? createUiReload({
+    root, script: "scripts/build-browser.mjs", ignore: ["browser.mjs", "browser.mjs.next"],
+  }) : null;
   const assets = new Map([
     ["/", ["ui/index.html", "text/html; charset=utf-8"]],
+    ["/favicon.svg", ["ui/favicon.svg", "image/svg+xml"]],
     ["/browser.mjs", ["ui/browser.mjs", "text/javascript; charset=utf-8"]],
     [
       "/action-fields.mjs",
@@ -551,11 +582,14 @@ export async function serveApp(
       reply(status, "application/json", JSON.stringify(value));
     try {
       const url = new URL(request.url, "http://application.local");
+      const reloadResponse = request.method === "GET" && uiReload?.response(url.pathname);
+      if (reloadResponse) return reply(200, reloadResponse.type, reloadResponse.body);
       if (request.method === "GET" && url.pathname === "/healthz")
         return reply(200, "text/plain", "ok");
       if (request.method === "GET" && assets.has(url.pathname)) {
         const [name, type] = assets.get(url.pathname);
-        return reply(200, type, await readFile(new URL(name, rootUrl)));
+        const body = await readFile(new URL(name, rootUrl));
+        return reply(200, type, url.pathname === "/" && uiReload ? uiReload.inject(body) : body);
       }
       if (request.method === "GET" && url.pathname === "/markdown-it.js")
         return reply(200, "text/javascript; charset=utf-8", markdown);
@@ -572,6 +606,7 @@ export async function serveApp(
           200,
           application.view.execution.list({
             view: url.searchParams.get("view") === "protocol" ? "protocol" : "teaching",
+            order: url.searchParams.get("order") || undefined,
             cursor: url.searchParams.get("cursor") || undefined,
             limit: Math.max(
               1,
@@ -607,8 +642,23 @@ export async function serveApp(
           await readFile(resolved),
         );
       }
-      if (request.method !== "POST" || url.pathname !== "/api/actions")
+      const clearingLogs = url.pathname === "/api/execution/clear";
+      if (request.method !== "POST" || (!clearingLogs && url.pathname !== "/api/actions"))
         return json(404, { error: "Unknown route." });
+      if (clearingLogs) {
+        const site = request.headers["sec-fetch-site"];
+        const origin = request.headers.origin;
+        let sameOrigin = !site || site === "same-origin" || site === "none";
+        if (origin) {
+          try {
+            const scheme = request.socket.encrypted ? "https" :
+              (request.headers["x-forwarded-proto"] ?? "http").split(",")[0].trim();
+            sameOrigin &&= ["http", "https"].includes(scheme) &&
+              new URL(origin).origin === new URL(`${scheme}://${request.headers.host}`).origin;
+          } catch { sameOrigin = false; }
+        }
+        if (!sameOrigin) return json(403, { error: "Clear logs from this application's own page." });
+      }
       if (
         request.headers["content-type"]?.split(";")[0].trim().toLowerCase() !==
         "application/json"
@@ -630,6 +680,11 @@ export async function serveApp(
       } catch {
         return json(400, { error: "The action is not valid JSON." });
       }
+      if (clearingLogs) {
+        if (!action || Array.isArray(action) || typeof action !== "object" || Object.keys(action).length)
+          return json(400, { error: "Send an empty JSON object to clear execution logs." });
+        return json(200, await application.view.clearExecution());
+      }
       const result = await application.action(action);
       return json(200, result);
     } catch (error) {
@@ -649,6 +704,7 @@ export async function serveApp(
     server,
     port: server.address().port,
     async close() {
+      uiReload?.close();
       await application.close();
       await application.view.close();
       server.closeAllConnections();

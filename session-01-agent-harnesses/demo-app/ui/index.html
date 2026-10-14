@@ -3,7 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Session 1: Agent Harness Demo</title>
+    <title>Session 1 Agent Harness</title>
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
     <link rel="stylesheet" href="/style.css" />
     <script src="/markdown-it.js" defer></script>
     <script src="/browser.mjs" type="module"></script>
@@ -16,7 +17,7 @@
           <span class="mark" aria-hidden="true">H</span>
           <div>
             <h2>HN briefing</h2>
-            <p class="hint">Session 1: Agent Harness Demo</p>
+            <p class="hint">Session 1 Agent Harness</p>
           </div>
         </div>
         <div class="account">
@@ -80,7 +81,7 @@
             </div>
             <details>
               <summary>Change details</summary>
-              <pre id="approval-data"></pre>
+              <div id="approval-data"></div>
             </details>
           </section>
           <section
@@ -164,7 +165,6 @@
             <p id="execution-summary" class="hint">
               Requests and source operations appear here.
             </p>
-            <p class="hint">Recent operations are shown. Details includes earlier records.</p>
             <p id="execution-capture" class="hint" role="status"></p>
             <div id="trace"></div>
           </section>
@@ -337,7 +337,7 @@
               <ul id="saved-links"></ul>
               <details id="pending-save" hidden>
                 <summary>Unconfirmed change, retained in this visit</summary>
-                <pre id="pending-save-data"></pre>
+                <div id="pending-save-data"></div>
               </details>
             </section>
           </section>
@@ -369,46 +369,47 @@
       <div class="section-head">
         <h3 id="request-title">Request details</h3>
         <button id="close-request" type="button" class="quiet">
-          Back to execution
+          Close
         </button>
       </div>
-      <p class="hint">
-        Open a record to load its full sanitized detail, including its original
-        event name. Provider reasoning replay stays on the server. These are
-        supplied context and observed actions.
-      </p>
-      <p class="hint">
-        A request obtains one model response. A turn includes the response and
-        its tools. A run contains turns. A visit contains this app's conversations.
-        Local MCP uses an in-memory transport; hosted MCP uses HTTP.
-      </p>
+      <nav id="execution-scope" class="execution-scope" aria-label="Execution scope" hidden>
+        <button id="execution-all" type="button" class="text-button">All activity</button>
+        <span aria-hidden="true">/</span><span id="execution-scope-label"></span>
+      </nav>
       <form id="execution-search" class="execution-filters">
         <label for="execution-view">View
           <select id="execution-view">
-            <option value="teaching">Teaching</option>
+            <option value="teaching">Simplified View</option>
             <option value="protocol">Protocol and all events</option>
           </select>
         </label>
-        <label for="execution-query">Search records
+        <label id="execution-order-field" for="execution-order" hidden>Time order
+          <select id="execution-order" disabled>
+            <option value="desc">Newest first</option>
+            <option value="asc">Oldest first</option>
+          </select>
+        </label>
+        <label id="execution-query-field" for="execution-query">Search
           <input id="execution-query" type="search" maxlength="160" />
         </label>
-        <button type="submit" class="quiet">Search</button>
+        <details id="execution-more" class="execution-more">
+          <summary>More</summary>
+          <div class="execution-menu">
+            <button id="request-source" type="button" class="text-button">Request source</button>
+            <button id="tool-source" type="button" class="text-button">Tool source</button>
+            <button id="execution-clear" type="button" class="quiet" hidden disabled>Clear all execution logs</button>
+          </div>
+        </details>
       </form>
-      <div class="button-row">
-        <button id="execution-all" type="button" class="quiet">All activity</button>
-        <button id="execution-refresh" type="button" class="quiet">Refresh list</button>
-        <button id="execution-next" type="button" class="quiet" disabled>Next page</button>
-      </div>
-      <p id="execution-load-status" class="hint" role="status" aria-live="polite"></p>
-      <p id="execution-freshness" class="hint"></p>
-      <div class="button-row">
-        <button id="request-source" type="button" class="quiet">
-          See request code</button
-        ><button id="tool-source" type="button" class="quiet">
-          See tool code
-        </button>
+      <div class="execution-list-status">
+        <p id="execution-load-status" class="hint" role="status" aria-live="polite"></p>
+        <button id="execution-retry" type="button" class="quiet" hidden>Retry</button>
       </div>
       <div id="request-data"></div>
+      <footer id="execution-pagination" class="execution-pagination" hidden>
+        <button id="execution-first" type="button" class="quiet" hidden>First page</button>
+        <button id="execution-next" type="button" class="quiet" hidden>Next page</button>
+      </footer>
     </dialog>
     <dialog id="source-dialog" aria-labelledby="source-title">
       <div class="section-head">
