@@ -12,3 +12,13 @@ __pycache__/
 *.pyc
 .venv/
 .ruff_cache/
+dist/
+.vite/
+.cache/
+coverage/
+playwright-report/
+test-results/
+test-artifacts/
+.browser-profile/
+*.tsbuildinfo
+source-map.json
