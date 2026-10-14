@@ -39,6 +39,9 @@ selected model and funding through the development gateway. Chat requests
 spend that session's allowance. Stop the server with Ctrl+C.
 The token retains the app policy saved at issuance; create a new token after
 changing that policy. Stopping the server does not revoke the token.
+Save its Token ID and revoke replaced tokens through Account. Use the
+displayed minimum reservation when choosing a ceiling; a hold is not the
+final charge, and creating another token adds no credit.
 
 ### Make it your own
 
@@ -69,16 +72,14 @@ model through the existing agent loop.
 
 ### Package for the portal
 
-Copy the exact address from My app into `slug` in `workshop-app.json`.
-For `smallest-valid-app`, use `"slug": "smallest-valid-app"`.
-`smallest-possible-app` is a different address. Folder names, titles and ZIP
-filenames can differ from the address.
+Choose a unique address in My app and copy it into `slug` in
+`workshop-app.json`. The included `smallest-valid-app` address belongs to the
+class demo. Folder names, titles and ZIP filenames can differ from your address.
 
-From this folder, pass the address claimed in My app:
+If your claimed address is `my-agent`, set `"slug": "my-agent"` and run:
 
 ```sh
-uv run --locked python package.py --slug smallest-valid-app \
-  --output ~/Downloads/smallest-valid-app.zip
+uv run --locked python package.py --slug my-agent --output ../my-agent.zip
 ```
 
 Upload that ZIP, launch it and ask **What is the current UTC time?**
@@ -94,3 +95,19 @@ For a ZIP-validation error, compare these addresses and read the reported reason
 The portal's Connections hint alone cannot identify the cause.
 
 The ZIP dereferences the font symlinks. Montserrat uses `OFL.txt`.
+When copying this example into a separate project, use `cp -RL` to copy the
+font and license bytes too.
+
+### Check changes without spending
+
+```sh
+uv run --locked python -m unittest -v
+```
+
+The test mocks the gateway and checks a complete tool round for every declared
+model. It makes no provider calls. If you change the tool or model policy,
+update the test to exercise the behavior you intend.
+
+Keep the hosted listener on `0.0.0.0` and use the supplied `PORT`.
+The health route starts without inference. For new Python dependencies,
+update `pyproject.toml` and run `uv lock` before packaging.

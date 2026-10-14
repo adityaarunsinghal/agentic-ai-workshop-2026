@@ -17,8 +17,10 @@ prints its schema and result. No model or provider key is involved.
 
 ### Run the full loop
 
-Copy `.env.example` to `.env`. Enter your own OpenRouter key and an explicit
-tool-capable model ID privately. Then:
+Run `cp -n .env.example .env` to preserve any existing configuration. Enter
+your own capped OpenRouter key and an explicit tool-capable model ID privately.
+This CLI does not accept workshop development tokens; use either web app
+for Account's workshop-funded connection. Then:
 
 ```sh
 uv run --locked --env-file .env smallest-harness.py tools.py

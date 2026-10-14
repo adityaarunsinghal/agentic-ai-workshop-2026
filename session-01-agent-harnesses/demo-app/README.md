@@ -30,90 +30,67 @@ harness** contains fixed control, memory, scheduling and reviewer options.
 Browser refresh keeps this running preview's state. Stopping the fixture clears
 its conversation and saved preferences. Press **Ctrl+C** to stop it.
 
-### Live local work with your workshop connection
+### Use your workshop allowance locally
 
-Use this mode for the workshop-selected model, pricing profile and funding.
-Create a token in the portal under **Account → Local development token**.
-Add its gateway and token to this app's private `.env` or environment:
+After installing dependencies, preserve any existing private configuration:
+
+```sh
+cp -n .env.example .env
+```
+
+Open **Account → Local development token** in the class app store. Choose
+funding, a model and a ceiling at least as large as the displayed minimum.
+Create a token and put these values in `.env` using your editor:
 
 ```text
 WORKSHOP_DEVELOPMENT_URL=
 WORKSHOP_DEVELOPMENT_TOKEN=
 ```
 
-Use the development gateway URL supplied by the workshop, ending in
-`/api/development`. Start from this app's directory:
+Use Account's gateway, ending in `/api/development`, then run:
 
 ```sh
 npm run dev:development
 ```
 
-Open the printed loopback address. The **Local workshop development** banner
-shows the selected funding; the header shows the broker-selected model and
-profile. Startup reads bootstrap and preferences without a model request.
-Submitting a request uses the selected workshop allowance.
+Open the printed local address. The banner shows the selected funding and the
+header shows the model/profile. Startup checks the connection without making
+a model request; submitting a task spends the selected allowance.
 
-This mode uses the existing broker stream, request reservations, profile binding,
-recovery and complete provider replay. Bootstrap retains its real `development`
-mode and identity. Credentials stay on the server. It does not use a personal
-OpenRouter key or fall back to a hosted connection.
+A token captures the app policy at issuance. Save complete My app settings
+before issuing a token if your project needs additional services or storage.
+Issue a new token after changing that policy. Save the Token ID and revoke old
+tokens through Account; stopping this server does not revoke them.
 
-When bootstrap does not advertise HN, the local MCP server reads the HN API.
-When it supplies no storage allowance for the HN application's schema, preferences use
-`.local/preferences.sqlite`. Advertised services keep their broker scope;
-an error does not switch them to local storage or sources. Local execution logs
-stay under `.local/execution/`. `LOCAL_WORKDIR` can select another directory.
-Code runs with this computer's permissions.
+The broker keeps its model, payer, request limits and recovery rules. If the
+token does not declare HN or matching storage, this app uses local HN access
+and `.local/preferences.sqlite`. An advertised service that fails stays failed.
+Tokens remain on the server. Local code runs with this computer's permissions.
 
-### Real HN with a personal OpenRouter key
+### Optional: use your own OpenRouter account
 
-This mode uses your own OpenRouter key and the exact model you select.
-For workshop development access, use `dev:development` above. In this personal
-mode, your configured OpenRouter account pays for inference.
-
-Copy `.env.example` to `.env` in this folder. Enter your key and an explicit
-tool-capable OpenRouter model ID in your editor:
-
-```text
-OPENROUTER_API_KEY=
-OPENROUTER_MODEL=
-```
-
-Keep the values private. Then start:
+Put `OPENROUTER_API_KEY` and an explicit tool-capable `OPENROUTER_MODEL` in your
+private `.env`, then run:
 
 ```sh
 npm run dev:local
 ```
 
-Open the printed address and check the model displayed at the top before
-submitting a request. Startup makes no model call. Each submitted request can
-lead to several model calls and tool operations.
+This mode charges that OpenRouter account. Use a capped key. It sends requests
+to OpenRouter and does not switch to workshop funding.
 
-The local HN MCP server retrieves metadata from the official HN API. It supplies
-titles and links; the application does not retrieve full articles. The model
-may choose a different sequence from the scripted preview.
+### State and restarting
 
-Local mode preserves the selected model and complete context. It makes one
-provider attempt per model request and performs no automatic retry or model
-fallback. After an interrupted or failed paid request, inspect your OpenRouter
-activity before trying again; another attempt can incur another charge.
+Refresh keeps the running conversation. Restarting the server clears its
+conversation and timers. Real local preferences survive in
+`.local/preferences.sqlite`; `LOCAL_WORKDIR` selects another private directory.
+Workshop development uses broker storage only when the matching scope is
+advertised. Execution records in real local and development modes are stored
+separately under `.local/execution/`. Fixture/hosted archives are temporary.
+Clearing execution logs changes neither saved preferences nor spending.
 
-The application's request and output limits still apply. These limits do not
-establish a dollar ceiling. Use an appropriately capped provider key.
-Local code runs with your computer's permissions.
-
-Saved preferences and reading lists live in `.local/preferences.sqlite`.
-Conversation history and timers belong to the running process. Set
-`LOCAL_WORKDIR` in your private environment to use a different local data
-directory. Each copied project uses its own default directory.
-
-Execution records use a separate `.local/execution/<visit-id>/` archive in
-real local mode. They do not control permissions, request accounting or
-recovery. Fixture and hosted visits use temporary process archives, removed
-when the process closes normally. Fixtures do not write to your local data.
-
-Node 22 may print an experimental SQLite warning. The printed preview address
-and the application's state determine whether startup succeeded.
+Fixture output is scripted and free. Stop any local mode with **Ctrl+C**.
+Node 22's experimental SQLite warning alone does not mean startup failed.
 
 ### Make an edit
 
@@ -122,7 +99,8 @@ and the application's state determine whether startup succeeded.
 2. Change one instruction or add a small read-only tool.
 3. Restart the preview after changing server code. Refresh after changing
    [the interface](ui/index.html), [browser code](ui/main.mjs) or
-   [styles](ui/style.css).
+   [styles](ui/style.css). Rebuild browser code with `npm run build`, or set
+   `LOCAL_UI_HOT_RELOAD=1` for automatic UI rebuilds in development/personal mode.
 4. Inspect an outgoing request to check the instructions and tool declaration.
    Use real mode to evaluate how a model responds to your change.
 
@@ -209,6 +187,8 @@ If you rename a mapped function, update its anchor in
 [scripts/sources.mjs](scripts/sources.mjs). If you add public source outside the
 existing directories, declare it in [package-files.json](package-files.json).
 The source map is regenerated from current files during the build.
+If you rename the npm project or change dependencies, run
+`npm install --package-lock-only` and retain the updated lockfile.
 
 JSON records, approvals, saved-state details, Markdown code blocks and source
 files use syntax colors. Encoded JSON and fenced code inside record strings
@@ -251,18 +231,23 @@ runs the retained tests. It makes no paid model requests. This establishes local
 package behavior; the platform performs its own Linux build and readiness check.
 
 Review the printed inventory. Keep keys and private data in `.env` or `.local/`,
-outside source files. The ZIP excludes installed dependencies, local state,
+outside source files. The ZIP excludes macOS metadata, installed dependencies, local state,
 private environment files, logs and earlier archives. Include new public source
 through `package-files.json`.
 
 Upload the resulting file in My app. Keep `workshop-app.json` at the archive
 root. For a replacement, keep the same slug and create a fresh archive.
+The packager checks npm root metadata against the lockfile before writing.
+Ordinary defaults are allowed in `.env.example`; actual credentials stay in `.env`.
 
 ### Hosted execution
 
 `npm start` is the workshop startup path. The platform supplies the broker
 configuration and visitor allowance. Local fixture, development and personal OpenRouter
 modes are refused inside a hosted workshop runtime.
+Keep the hosted listener on `0.0.0.0`, honor the supplied port and health path,
+and make no paid inference or external tool calls during readiness.
+Local preview commands deliberately bind to loopback.
 
 Local `.env` values never select the hosted payer. Model choice and funding
 come from the portal. A failed replacement leaves the earlier published app
@@ -272,13 +257,14 @@ available while you correct the new source.
 
 | What you see | Next step |
 | --- | --- |
-| “Start this app through the workshop portal” after `npm start` | Use `npm run dev:fixture` or configure `npm run dev:local` for laptop work. |
+| “Start this app through the workshop portal” after `npm start` | Use `dev:fixture`, `dev:development` or `dev:local` for laptop work. |
 | Missing OpenRouter configuration | Fill both private environment variables before starting real mode. |
 | HN or provider error | Inspect the failed request and evidence. A failed live call stays failed. |
 | Source navigation error | Update the corresponding anchor in `scripts/sources.mjs`, then rebuild. |
 | HN-only declaration error | Update the app's tool adapter and build declaration check together when changing its sources. |
 | Preferences conflict | Reload saved preferences and review the proposed change again. |
-| Request limit or local visit expiry | Keep any needed work, then restart the local process. Real saved preferences survive. |
+| Request limit, insufficient funds or expired development token | Check Account and any pending reservations. Use request status/recovery when offered. A server restart does not reset the token allowance. |
+| Assigned worker verification error in a hosted visit | Report the app link, time and exact error to Adi. Repackaging or adding credentials does not repair platform authentication. |
 
 For help, include what you tried, the relevant error and a public-safe trace.
 Keep keys, private documents and account credentials out of shared diagnostics.

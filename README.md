@@ -1,89 +1,80 @@
 ## Agentic AI workshop 2026
 
 Build an agent around an idea you care about, share it with the class, and learn
-from trying each other's projects.
+from trying each other's projects. Materials appear here as they are released.
 
-Each session's materials will be released in this repository the day before
-that class.
+### Choose where to start
 
-## Session 1 materials
+| Your goal | Start here | Install |
+| --- | --- | --- |
+| Build a small working app | [Minimal Python app](session-01-agent-harnesses/examples/smallest-valid-app/README.md): chat and one time tool | Git and uv |
+| Inspect a complete agent | [HN harness](session-01-agent-harnesses/demo-app/README.md): tools, approvals, memory and execution records | Git, Node.js 22.19+, npm; uv for packaging |
+| Read the smallest tool loop | [Python CLI harness](session-01-agent-harnesses/examples/smallest-working-harness/README.md) | uv |
+| Review the class | [Session 1 slides, reading and exercises](session-01-agent-harnesses/README.md) | A browser |
 
-Start with the [slides, readings and guided practice](session-01-agent-harnesses/README.md).
-The [demo guide](session-01-agent-harnesses/demo-app/README.md) covers the free
-local preview, real OpenRouter setup and source packaging.
+### Run your first app
 
-## [Class webpage: materials and schedule](https://adityasinghal.com/agentic-ai-workshop/)
+The shortest path uses the minimal Python app. These commands copy its shared
+font files into your project too:
 
-Find the workshop schedule, teaching materials, and class announcements here.
-
-## [Class app store: try, upload, and review agents](https://nyu-workshop.adityasinghal.com/)
-
-Sign in with the Google address you provided for workshop access. Use the store
-to try the class demos, publish your agent, and give classmates feedback.
-
-## Clone and build your own agent
-
-Install Git, Node.js 22.19 or newer, npm, and uv for packaging. Clone this repository and copy
-the Session 1 starter into a folder for your own project:
-
-```bash
+```sh
 git clone https://github.com/adityaarunsinghal/agentic-ai-workshop-2026.git
 cd agentic-ai-workshop-2026
-cp -R session-01-agent-harnesses/demo-app my-agent
+cp -RL session-01-agent-harnesses/examples/smallest-valid-app my-agent
 cd my-agent
-npm ci
+cp -n .env.example .env
 ```
 
-Start with your own idea: a study coach, research assistant, project planner, or
-something useful to you. Give it a concrete task and decide which tools it needs.
+Sign in to the [class app store](https://nyu-workshop.adityasinghal.com/) with
+your approved Google address. Open **Account → Local development token**, choose
+funding, model and a ceiling that meets the displayed minimum, then create a
+token. Put its gateway and token in your private `.env` using a text editor.
+You can start locally before uploading a ZIP or choosing an app address.
 
-- `agent/app.mjs`: change the instructions, tools, user-preferences, and approvals.
-- `agent/pi-mini.mjs`: read how the harness calls the model and executes tools.
-- `agent/workshop.mjs`: connect inference, tools, and storage to your environment.
-- `ui/`: adapt the interface to your agent's task.
-- `workshop-app.json`: set your app's unique slug, title, description, and runtime
-  requirements. Adjust the starter's HN-specific build checks if you change its
-  declared services.
-
-Start the free scripted preview:
-
-```bash
-npm run dev:fixture
+```sh
+uv run --locked --env-file .env python app.py
 ```
 
-Open the local address printed in the terminal. The preview uses synthetic
-HN records and model responses. For real local inference, follow the demo
-guide to configure your private OpenRouter key and model, then use
-`npm run dev:local`. You can ask Adi about a custom key.
+Open `http://localhost:8080` and ask for the current UTC time. Requests use your
+selected allowance. Stop the server with Ctrl+C. Keep the token private and
+save its Token ID for revocation; stopping the server does not revoke it.
 
-## Zip and upload
+For a free scripted preview, use the HN harness's `npm run dev:fixture` instead.
+Its [guide](session-01-agent-harnesses/demo-app/README.md) also explains workshop
+funding and the optional use of your own OpenRouter account.
 
-1. Open **My app** in the class app store and choose a unique app address.
-   Put that same slug in `workshop-app.json`.
-2. Build your app, then run this command from inside its folder:
+### Make it yours and publish
 
-   ```bash
-   npm run package:workshop -- --output ../my-agent.zip
-   npm run verify:package -- --zip ../my-agent.zip
+Change the tool and instructions in your chosen app, then try a complete task.
+Start with a small useful version: a study coach, research assistant or project
+planner. Each app's README identifies its editable files.
+
+1. In **My app**, choose a unique address. Set the same `slug` in
+   `workshop-app.json`, and write your own title, description and instructions.
+2. Create a fresh ZIP with the app's packager. For the Python app above, if your
+   claimed address is `my-agent`, run:
+
+   ```sh
+   uv run --locked python package.py --slug my-agent --output ../my-agent.zip
    ```
 
-   Keep `workshop-app.json` at the ZIP root. Include source, assets, licenses,
-   `package.json`, and `package-lock.json`. Keep API keys and private data outside
-   the ZIP.
-3. In **My app**, choose your ZIP and select **Publish ZIP**. Follow the build
-   status and complete any required connection settings.
-4. Open the published project and try a complete task. Share its link with the
-   class. For later changes, rebuild, create a fresh ZIP, and select
-   **Publish replacement ZIP**.
+   For the HN app, follow its [packaging instructions](session-01-agent-harnesses/demo-app/README.md#create-a-fresh-upload-zip).
+3. In **My app**, select your ZIP, choose **Publish ZIP**, and follow the build
+   status. Open the published app and complete a task. For later updates, keep
+   the slug and create a new ZIP for **Publish replacement ZIP**.
 
-## Try classmates' agents and leave feedback
+Use the packager's ZIP, with the manifest at its root. Keep `.env`, tokens,
+local data and installed dependencies out of uploads. If packaging or launch
+fails, start with [troubleshooting](session-01-agent-harnesses/TROUBLESHOOTING.md).
+
+### Try classmates' agents and leave feedback
 
 Open a classmate's project, try a task, and expand **Give feedback**. Select the
 basis that matches what you did: **Used the app**, **Watched a demo**, or
 **Read the project**. Describe what you tried, what worked, and one concrete
 improvement, then select **Send feedback**.
 
-## Demo day and course credit
+### Demo day and course credit
 
 **A version of your agent must be uploaded to the class platform for credit,
 even if you demonstrate the full agent elsewhere.** A small working variant
@@ -93,12 +84,12 @@ in its project description.
 If you want to demonstrate your agent outside the app platform on demo day,
 reply to one of Adi's workshop emails ahead of time to arrange it.
 
-## Questions, issues, and local OpenRouter access
+### Schedule and help
 
-Reply to one of the workshop emails you received after registering to reach
-the instructor, **Adi Singhal**.
+The [class webpage](https://adityasinghal.com/agentic-ai-workshop/) has the
+schedule and announcements. The [Session 1 guide](session-01-agent-harnesses/README.md)
+has the publication deadline and practice exercises.
 
-Contact Adi with questions, access or upload issues, or requests to demo outside
-the platform. For a technical issue, include your project link, what you tried,
-and the error message. You can also ask Adi for a custom OpenRouter key for local
-development.
+Reply to a workshop email to reach **Adi Singhal**. For a technical issue,
+include your project link, what you tried, the time and the exact error or
+relevant build log. Remove tokens and private data before sharing.
