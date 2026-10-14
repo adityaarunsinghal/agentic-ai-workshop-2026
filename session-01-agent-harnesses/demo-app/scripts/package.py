@@ -11,6 +11,7 @@ import hashlib
 import json
 import shutil
 import stat
+import subprocess
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -28,6 +29,7 @@ PRIVATE_NAMES = {
     "node_modules",
     "tmp",
     ".DS_Store",
+    "__MACOSX",
     "log.md",
 }
 KEY_NAMES = {"id_rsa", "id_ed25519", "credentials.json", "service-account.json"}
@@ -40,6 +42,7 @@ def digest(data: bytes) -> str:
 def excluded(path: Path) -> bool:
     return (
         path.name in PRIVATE_NAMES
+        or path.name.startswith("._")
         or (path.name.startswith(".env") and path.name != ".env.example")
         or path.suffix in {".zip", ".log", ".pyc"}
     )
@@ -108,25 +111,52 @@ def inventory() -> tuple[list[Path], list[str]]:
     return sorted(paths, key=lambda p: p.relative_to(ROOT).as_posix()), sorted(omitted)
 
 
+def check_package_metadata(payload: dict[str, bytes]) -> None:
+    """Catch root metadata drift before uploading; npm ci checks the full graph."""
+    package = json.loads(payload["package.json"])
+    lock = json.loads(payload["package-lock.json"])
+    root = lock.get("packages", {}).get("")
+    if lock.get("lockfileVersion") not in (2, 3) or not isinstance(root, dict):
+        raise ValueError("Use an npm v2/v3 package-lock.json with root package metadata.")
+    for field in ("name", "version"):
+        if field in package and package[field] != root.get(field, lock.get(field)):
+            raise ValueError(
+                f"package-lock.json root {field} disagrees with package.json. "
+                "Run npm install --package-lock-only, then package again."
+            )
+    for field in ("dependencies", "devDependencies", "optionalDependencies"):
+        declarations = [package.get(field, {}), root.get(field, {})]
+        if any(
+            not isinstance(value, dict)
+            or any(not isinstance(version, str) or not version for version in value.values())
+            for value in declarations
+        ):
+            raise ValueError(f"Invalid {field} in package.json or package-lock.json.")
+        if declarations[0] != declarations[1]:
+            raise ValueError(
+                f"package-lock.json root {field} disagrees with package.json. "
+                "Run npm install --package-lock-only, then package again."
+            )
+
+
 def build(output: Path) -> dict:
     files, omitted = inventory()
     payload = {path.relative_to(ROOT).as_posix(): path.read_bytes() for path in files}
-    # Example configuration has names and guidance, never filled credentials.
-    for name, data in payload.items():
-        if Path(name).name != ".env.example":
-            continue
-        for line in data.decode("utf-8").splitlines():
-            if not line.strip() or line.lstrip().startswith("#") or "=" not in line:
-                continue
-            variable, value = line.split("=", 1)
-            if (
-                any(
-                    term in variable.upper()
-                    for term in ("KEY", "TOKEN", "SECRET", "PASSWORD")
-                )
-                and value.strip()
-            ):
-                raise ValueError("Leave credential values empty in .env.example")
+    check_package_metadata(payload)
+    # The portable checker is generated from the portal's exact rule.
+    examples = [
+        {"path": name, "text": data.decode("utf-8")}
+        for name, data in payload.items()
+        if Path(name).name.lower() == ".env.example"
+    ]
+    if examples:
+        checked = subprocess.run(
+            ["node", str(ROOT / "scripts/check-env-example.mjs")],
+            input=json.dumps(examples), text=True, capture_output=True, timeout=15,
+        )
+        if checked.returncode:
+            result = json.loads(checked.stdout) if checked.stdout else {}
+            raise ValueError(result.get("error", "Example configuration validation failed."))
     if sum(map(len, payload.values())) > EXPANDED_LIMIT:
         raise ValueError("Package source exceeds the expanded-size limit")
     output.parent.mkdir(parents=True, exist_ok=True)

@@ -141,7 +141,51 @@ test("packaging rejects undeclared root source, key files and filled example cre
   );
   const result = packageSource(source, zip);
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Leave credential values empty/);
+  assert.match(result.stderr, /credential field.*OPENROUTER_API_KEY.*empty or an obvious placeholder/);
+  assert.ok(!result.stderr.includes("synthetic-value"));
+});
+
+test("ordinary defaults pass while credential-bearing URLs fail without exposing values", async () => {
+  const { source, zip } = await project();
+  const example = resolve(source, ".env.example");
+  await writeFile(example, "MAX_TOKENS=4096\nREQUEST_TIMEOUT_MS=90000\nOPENROUTER_API_KEY=\n");
+  let result = packageSource(source, zip);
+  assert.equal(result.status, 0, result.stderr);
+  await writeFile(example, "SERVICE_URL=https://example.com/api?api_key=synthetic-url-secret\n");
+  result = packageSource(source, zip);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /URL.*contains credentials/);
+  assert.ok(!result.stderr.includes("synthetic-url-secret"));
+});
+
+test("packaging rejects stale npm root metadata and dependency declarations", async () => {
+  const { source, zip } = await project();
+  const filename = resolve(source, "package.json");
+  const original = JSON.parse(await readFile(filename, "utf8"));
+  for (const [field, value] of [
+    ["name", "my-renamed-agent"],
+    ["version", "2.0.0"],
+    ["dependencies", { ...original.dependencies, "example-dependency": "1.0.0" }],
+    ["devDependencies", { "example-test-tool": "1.0.0" }],
+    ["optionalDependencies", { "example-optional-tool": "1.0.0" }],
+  ]) {
+    await writeFile(filename, JSON.stringify({ ...original, [field]: value }));
+    const result = packageSource(source, zip);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, new RegExp(`root ${field} disagrees`));
+    assert.match(result.stderr, /npm install --package-lock-only/);
+  }
+});
+
+test("macOS metadata stays out of source ZIPs", async () => {
+  const { source, zip } = await project();
+  await mkdir(resolve(source, "__MACOSX"));
+  await writeFile(resolve(source, "__MACOSX/._app.mjs"), "synthetic metadata");
+  await writeFile(resolve(source, "ui/._index.html"), "synthetic metadata");
+  const result = packageSource(source, zip);
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(!archiveNames(zip).some((name) =>
+    name.split("/").some((part) => part === "__MACOSX" || part.startsWith("._"))));
 });
 
 test("included symlinks cannot pull a file from outside the project", async () => {
