@@ -1,7 +1,7 @@
 {
   "schemaVersion": "workshop.app.v1",
   "slug": "smallest-valid-app",
-  "title": "Smallest valid app",
+  "title": "Session 1 Minimal App demo",
   "description": "Chat with one UTC-time tool.",
   "runtime": {
     "languages": ["python312"],
@@ -13,8 +13,14 @@
   },
   "instructions": "Ask for the current UTC time, then keep chatting.",
   "inference": {
-    "mode": "fixed",
-    "models": ["deepseek/deepseek-v4.1-flash"],
+    "mode": "selectable",
+    "models": [
+      "deepseek/deepseek-v4.1-flash",
+      "openai/gpt-6-luna",
+      "z-ai/glm-5.3-flash",
+      "anthropic/claude-haiku-5.5"
+    ],
+    "defaultModel": "deepseek/deepseek-v4.1-flash",
     "defaultProfile": "deepseek-auto",
     "estimatedUsdPerVisit": {"low": 0, "high": 0.1},
     "estimateBasis": "Illustrative; portal limits apply."

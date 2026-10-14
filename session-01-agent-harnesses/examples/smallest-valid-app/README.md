@@ -1,4 +1,4 @@
-## Smallest valid app
+## Session 1 Minimal App demo
 
 Python 3.12, no dependencies. One UTC-time tool and a chat.
 The portal supplies inference and pays from your selected allowance.

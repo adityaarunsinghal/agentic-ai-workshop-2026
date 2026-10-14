@@ -34,6 +34,7 @@ names = (
     "workshop-app.json",
     "README.md",
     "package.py",
+    "test_app.py",
 )
 # Local development settings stay in the checkout. Hosted execution receives
 # its gateway and port from the platform, so no .env files belong in the ZIP.

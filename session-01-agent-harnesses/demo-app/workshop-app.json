@@ -1,7 +1,7 @@
 {
   "schemaVersion": "workshop.app.v1",
   "slug": "session-01-harness-demo",
-  "title": "Session 1: Agent Harness Demo",
+  "title": "Session 1 Agent Harness",
   "description": "Explore an HN agent's context, tools, permissions and memory.",
   "runtime": {
     "languages": ["node22"],
@@ -17,7 +17,8 @@
     "models": [
       "deepseek/deepseek-v4.1-flash",
       "openai/gpt-6-luna",
-      "z-ai/glm-5.3-flash"
+      "z-ai/glm-5.3-flash",
+      "anthropic/claude-haiku-5.5"
     ],
     "defaultModel": "deepseek/deepseek-v4.1-flash",
     "defaultProfile": "deepseek-auto",
