@@ -9,8 +9,10 @@ from trying each other's projects. Materials appear here as they are released.
 | --- | --- | --- |
 | Build a small working app | [Minimal Python app](session-01-agent-harnesses/examples/smallest-valid-app/README.md): chat and one time tool | Git and uv |
 | Inspect a complete agent | [HN harness](session-01-agent-harnesses/demo-app/README.md): tools, approvals, memory and execution records | Git, Node.js 22.19+, npm; uv for packaging |
+| Build beyond chat | [Session 2 newspaper editor](session-02-beyond-chat-interfaces/demo-app/README.md): MCP tools, an interactive editor, editorial decisions and auto research | Git, Node.js 22.19+, npm; uv for packaging |
 | Read the smallest tool loop | [Python CLI harness](session-01-agent-harnesses/examples/smallest-working-harness/README.md) | uv |
 | Review the class | [Session 1 slides, reading and exercises](session-01-agent-harnesses/README.md) | A browser |
+| Review Session 2 | [Beyond the Chat Interface slides](session-02-beyond-chat-interfaces/slides/session-02-beyond-chat-interfaces-2026-10-15.html) | A browser |
 
 ### Run your first app
 

@@ -1,0 +1,17 @@
+{
+  "headline": "Dance and AI: Build a partner, not an autopilot",
+  "body": "A useful AI dance agent is less a robot choreographer than a responsive partner. MIT Media Lab’s Open Dance Lab draws on six principles from Thai choreographer Pichet Klunchun’s analysis of Mae Bot Yai to animate a virtual dancer. Its platform offers 59 annotated 3D poses and lets users generate sequences grounded in that vocabulary. The project addresses a key limitation of motion capture: recording visible form does not capture tacit knowledge, cultural context or improvisation. It treats digital preservation as a basis for experimentation, not just archiving. (MIT Media Lab, “Open Dance Lab”)\n\nA 2024 UC Santa Barbara prototype supports choreographic ideation in a different way. Users generate dance sequences from text, then edit and modify the motion in a web interface. The system is designed for iterative digital prototyping, so choreographers can document and refine ideas without physically performing every draft. Six choreographers assessed its benefits and limitations; this small evaluation offers useful feedback, not proof of broad effectiveness. (Liu and Sra, “Exploring AI-assisted Ideation and Prototyping for Choreography”)\n\nA 2025 preprint presents another interaction pattern: instead of generating choreography from music, the system responds to a dancer’s movements by selecting and combining prerecorded music clips in real time. Correlation analysis of pilot performances found emerging patterns between movement qualities and audio features. The authors frame these as signs of communication between dancer and system, not validation of a general-purpose agent. (Bos et al., “Reimagining Dance”)\n\nTogether, the projects point to practical design choices for creative agents: ground generation in domain knowledge, make results editable, and let human actions shape the system’s response. Evaluate prototypes cautiously, and keep the person’s creative role central. The aim is collaboration, not autopilot.",
+  "sourceIds": [
+    "web-a5ee9f5841ddb08bed709e4a",
+    "web-38a2897a363808afcb645ed5",
+    "web-4e059ed57dfd38c5c509fdde"
+  ],
+  "fit": {
+    "maxWords": 248,
+    "estimated": true,
+    "words": 281,
+    "characters": 1940,
+    "status": "overflow"
+  },
+  "note": "Captured resize response, 2026-10-15: 281 words against a 248-word target. No requests are made when replaying this fixture."
+}

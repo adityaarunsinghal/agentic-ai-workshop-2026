@@ -5,6 +5,7 @@ tmp/
 log.md
 *.log
 *.zip
+/*.manifest.json
 .env
 .env.*
 !.env.example

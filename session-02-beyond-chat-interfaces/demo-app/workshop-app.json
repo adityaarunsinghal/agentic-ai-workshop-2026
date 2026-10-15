@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "workshop.app.v1",
+  "slug": "session-02-beyond-chat-demo",
+  "title": "Session 2 Beyond the Chat Interface",
+  "description": "Edit a newspaper through MCP Apps, research stories in blank spaces, and inspect Choice/Noul decisions.",
+  "runtime": {
+    "languages": ["node22"],
+    "profile": "standard",
+    "build": ["node", "scripts/check-runtime.mjs", "--check-hosted-transport"],
+    "start": ["node", "src/server.mjs"],
+    "port": 8080,
+    "healthPath": "/healthz"
+  },
+  "instructions": "Find sources, drag and edit stories, request a story in blank space, inspect Execution, and download the newspaper.",
+  "inference": {
+    "mode": "selectable",
+    "models": [
+      "deepseek/deepseek-v4.1-flash",
+      "openai/gpt-6-luna",
+      "z-ai/glm-5.3-flash",
+      "anthropic/claude-haiku-5.5"
+    ],
+    "defaultModel": "openai/gpt-6-luna",
+    "defaultProfile": "luna-auto",
+    "estimatedUsdPerVisit": { "low": 0, "high": 1 },
+    "estimateBasis": "The app permits up to $1 of recorded usage and pending reservations for an extended visit. This is a ceiling, not an hourly price estimate. The visitor's selected portal ceiling and remaining allowance also apply."
+  },
+  "network": {
+    "classServices": ["hn"],
+    "publicHttpsDomains": ["hn.algolia.com", "hacker-news.firebaseio.com", "news.google.com"],
+    "publicWeb": true
+  },
+  "storage": { "visitorMiB": 20, "schema": "newspaper.edition.v1" },
+  "integrations": []
+}

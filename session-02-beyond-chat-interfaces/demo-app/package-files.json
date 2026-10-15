@@ -1,0 +1,23 @@
+{
+  "rootFiles": [
+    ".env.example",
+    ".gitignore",
+    "LICENSE",
+    "README.md",
+    "THIRD-PARTY-NOTICES.md",
+    "package-files.json",
+    "package.json",
+    "package-lock.json",
+    "source-map.json",
+    "vite.config.mjs",
+    "workshop-app.json"
+  ],
+  "directories": [
+    "src",
+    "reference",
+    "scripts",
+    "skills",
+    "test",
+    "ui"
+  ]
+}
