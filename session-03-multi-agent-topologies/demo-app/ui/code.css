@@ -1,0 +1,83 @@
+:root {
+  --code-keyword: #d5b4f5;
+  --code-property: #a7d8fa;
+  --code-string: #b8dba1;
+  --code-number: #efbd8b;
+  --code-comment: #a2ad99;
+  --code-function: #e4cf8d;
+  --code-tag: #eda9a2;
+  --code-punctuation: #c0c8b7;
+}
+.editor-app, .editor-popover {
+  --code-keyword: #79449f;
+  --code-property: #185d88;
+  --code-string: #346838;
+  --code-number: #9a4b12;
+  --code-comment: #667260;
+  --code-function: #7c5b0d;
+  --code-tag: #9b3c3c;
+  --code-punctuation: #526050;
+}
+.code-view { min-width: 0; max-width: 100%; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.code-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); user-select: none; }
+.code-toolbar > span { font: 10px/1.5 Montserrat, sans-serif; color: var(--muted); }
+.code-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.code-actions button { min-height: 30px; padding: 4px 8px; font-size: 10px; }
+.code-view pre { max-height: 60dvh; max-width: 100%; overflow: auto; overscroll-behavior: contain; margin: 0; padding: 14px 16px; white-space: pre; tab-size: 2; scrollbar-gutter: stable; }
+.code-view pre, .code-view code { font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.code-view code { background: transparent; color: inherit; display: block; white-space: inherit; word-break: normal; overflow-wrap: normal; user-select: text; }
+.code-view[data-wrap=true] pre { white-space: pre-wrap; }
+.code-view[data-wrap=true] code { overflow-wrap: anywhere; }
+.code-copy-status { font: 10px/1.5 Montserrat, sans-serif; color: var(--muted); margin: 6px 10px; }
+.code-view ::selection, .json-arguments ::selection { background: var(--accent); color: var(--background); }
+.code-view .hljs { color: var(--ink); }
+.code-view .hljs-comment, .code-view .hljs-quote { color: var(--code-comment); }
+.code-view .hljs-keyword, .code-view .hljs-selector-tag, .code-view .hljs-doctag, .code-view .hljs-meta .hljs-keyword { color: var(--code-keyword); }
+.code-view .hljs-string, .code-view .hljs-regexp, .code-view .hljs-template-tag, .code-view .hljs-addition { color: var(--code-string); }
+.code-view .hljs-number, .code-view .hljs-literal, .code-view .hljs-variable, .code-view .hljs-symbol { color: var(--code-number); }
+.code-view .hljs-attr, .code-view .hljs-attribute, .code-view .hljs-property, .code-view .hljs-selector-attr { color: var(--code-property); }
+.code-view .hljs-title, .code-view .hljs-section, .code-view .hljs-built_in, .code-view .hljs-type { color: var(--code-function); }
+.code-view .hljs-name, .code-view .hljs-tag, .code-view .hljs-selector-class, .code-view .hljs-selector-id, .code-view .hljs-deletion { color: var(--code-tag); }
+.code-view .hljs-punctuation, .code-view .hljs-operator, .code-view .hljs-meta { color: var(--code-punctuation); }
+.code-view .hljs-emphasis { font-style: italic; }
+.code-view .hljs-strong { font-weight: 600; }
+.json-view-options { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.json-parsed-string { margin-left: 8px; color: var(--code-comment); font-style: italic; white-space: normal; overflow-wrap: anywhere; }
+.incidental-value { display: inline; }
+.incidental-value[data-concealed=true] { cursor: pointer !important; }
+.incidental-value[data-concealed=true] > span { filter: blur(3px); user-select: none; }
+.incidental-value:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+.json-arguments { margin: 16px 0; min-width: 0; }
+.json-arguments-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.json-arguments-heading label { margin: 0 !important; cursor: text; }
+.json-arguments-heading button { font-size: 10px; min-height: 32px; }
+.json-arguments-editor { border: 1px solid var(--control); border-radius: 5px; background: var(--background); color: var(--ink); overflow: hidden; }
+.json-arguments .cm-editor { min-height: 145px; }
+.json-arguments .cm-scroller { max-height: 360px; overflow: auto; font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.json-arguments .cm-content { padding: 12px 0; caret-color: var(--ink); }
+.json-arguments .cm-line { padding: 0 12px 0 calc(12px + var(--json-continuation-indent, 2ch)); text-indent: calc(0px - var(--json-continuation-indent, 2ch)); }
+.json-arguments .cm-cursor { border-left-color: var(--ink); }
+.json-arguments .cm-editor.cm-focused { outline: 2px solid var(--accent); outline-offset: -2px; }
+.json-arguments .code-property { color: var(--code-property); }
+.json-arguments .code-string { color: var(--code-string); }
+.json-arguments .code-number, .json-arguments .code-literal { color: var(--code-number); }
+.json-arguments .code-punctuation { color: var(--code-punctuation); }
+.markdown-body { overflow-wrap: anywhere; white-space: normal; line-height: 1.7; }
+.markdown-body > :first-child { margin-top: 0; }
+.markdown-body > :last-child { margin-bottom: 0; }
+.markdown-body h1 { font-size: 21px; font-weight: 500; line-height: 1.45; }
+.markdown-body h2 { font-size: 18px; font-weight: 500; }
+.markdown-body h3 { font-size: 15px; }
+.markdown-body ul, .markdown-body ol { padding-left: 24px; }
+.markdown-body blockquote { margin: 16px 0; padding-left: 16px; color: var(--muted); border-left: 2px solid var(--control); }
+.markdown-body :not(pre) > code { font: .92em/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--code-property); background: var(--raised); padding: 2px 4px; border-radius: 3px; }
+.markdown-body .markdown-code { margin: 14px 0; }
+.markdown-body table { display: block; overflow-x: auto; max-width: 100%; border-collapse: collapse; margin: 16px 0; }
+.markdown-body th, .markdown-body td { border: 1px solid var(--line); text-align: left; padding: 8px 12px; }
+.markdown-image-alt { color: var(--muted); }
+.markdown-source { margin-top: 12px; }
+@media (max-width: 640px) {
+  .code-toolbar { padding: 6px 8px; }
+  .code-view pre { padding: 10px; }
+  .code-actions button { min-height: 36px; }
+}

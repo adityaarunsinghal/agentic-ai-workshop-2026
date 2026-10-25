@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "workshop.app.v1",
+  "slug": "session-03-multiagent-demo",
+  "title": "Multi-agent fact-checker",
+  "description": "Fact-check a newspaper story with a single agent, a graph or a swarm, and watch each claim get its verdict.",
+  "runtime": {
+    "languages": ["node22"],
+    "profile": "standard",
+    "build": ["node", "scripts/check-runtime.mjs", "--check-hosted-transport"],
+    "start": ["node", "src/server.mjs"],
+    "port": 8080,
+    "healthPath": "/healthz"
+  },
+  "instructions": "Choose an arrangement in the header, load the demo story and run a fact-check. Open Execution to watch each claim. Turn on demo mode in settings to replay recorded runs at no cost.",
+  "inference": {
+    "mode": "selectable",
+    "models": [
+      "deepseek/deepseek-v4.1-flash",
+      "openai/gpt-6-luna",
+      "z-ai/glm-5.3-flash",
+      "anthropic/claude-haiku-5.5"
+    ],
+    "defaultModel": "openai/gpt-6-luna",
+    "defaultProfile": "luna-auto",
+    "estimatedUsdPerVisit": { "low": 0, "high": 3 },
+    "estimateBasis": "The app permits up to $3 of recorded usage and pending reservations for an extended visit. This is a ceiling, not an hourly price estimate. The visitor's selected portal ceiling and remaining allowance also apply."
+  },
+  "network": {
+    "classServices": ["hn"],
+    "publicHttpsDomains": ["hn.algolia.com", "hacker-news.firebaseio.com", "news.google.com"],
+    "publicWeb": true
+  },
+  "storage": { "visitorMiB": 20, "schema": "newspaper.edition.v1" },
+  "integrations": []
+}

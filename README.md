@@ -13,6 +13,8 @@ from trying each other's projects. Materials appear here as they are released.
 | Read the smallest tool loop | [Python CLI harness](session-01-agent-harnesses/examples/smallest-working-harness/README.md) | uv |
 | Review the class | [Session 1 slides, reading and exercises](session-01-agent-harnesses/README.md) | A browser |
 | Review Session 2 | [Beyond the Chat Interface slides](session-02-beyond-chat-interfaces/slides/session-02-beyond-chat-interfaces-2026-10-15.html) | A browser |
+| Compare agent topologies | [Session 3 multi-agent fact-checker](session-03-multi-agent-topologies/demo-app/README.md): Check a story with a single agent, a graph and a swarm | Git, Node.js 22.19+, npm; uv for packaging |
+| Review Session 3 | [Multi-agent systems slides](session-03-multi-agent-topologies/slides/session-03-multi-agent-topologies-2026-10-22.html) | A browser |
 
 ### Run your first app
 
