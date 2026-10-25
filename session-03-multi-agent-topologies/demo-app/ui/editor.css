@@ -89,9 +89,9 @@
 .auto-research-actions button { min-height: 34px; padding: 6px 10px; font-size: 11px; white-space: normal; }
 .auto-research-actions .text-button { padding-inline: 0; }
 .fact-check-topology { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--muted); }
-.fact-check-topology select { min-height: 34px; padding: 4px 8px; font-size: 11px; }
+.fact-check-topology select { min-height: 34px; padding: 4px var(--select-padding-right) 4px 8px; font-size: 11px; }
 .fact-check-topology { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--muted); }
-.fact-check-topology select { min-height: 32px; padding: 4px 6px; font-size: 11px; }
+.fact-check-topology select { min-height: 32px; padding: 4px var(--select-padding-right) 4px 6px; font-size: 11px; }
 .auto-research-cycle { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; padding: 0; margin: 10px 0 0; list-style: none; color: var(--muted); font-size: 10px; }
 .auto-research-cycle li { display: flex; align-items: center; }
 .auto-research-cycle li + li::before { content: "→"; margin: 0 8px; color: var(--muted); font-weight: 400; }

@@ -128,6 +128,7 @@ export const toolSchemas = {
     slotId: sourceIdSchema,
     contentVersion: version,
   }),
+  cancel_auto_research: z.strictObject({ runId: z.uuid() }),
   request_fact_check: z.strictObject({
     slotId: sourceIdSchema,
     contentVersion: version,
